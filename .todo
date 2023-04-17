@@ -1,0 +1,13 @@
+Backend check list 
+[-] create database schema
+[-] design db model 
+[-] implement /search endpoint
+[-] implement /upload_batch endpoint 
+[-] add some auth protection on /upload_batch endpoint 
+[-] serve audio files (stream from client)
+[-] support downloading 
+
+UI check list 
+[-] search interface 
+[-] audio pane display 
+[-] audio player interface 
