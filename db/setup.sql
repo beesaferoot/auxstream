@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS auxstream.tracks (
     id serial primary key,
     title text not null,
     artist_id integer references auxstream.artists(id),
-    file_path text not null,
+    file_name text not null,
     created_at timestamp default CURRENT_TIMESTAMP
 );
 
