@@ -50,23 +50,22 @@ func New(config DBconfig, context context.Context) *DataBaseAccessObject {
 */
 
 func (dao *DataBaseAccessObject) CreateTrack(
-	ctx context.Context, 
-	title string, 
-	artistName string, 
-	fileName string ) (track *Track, err error) {
+	ctx context.Context,
+	title string,
+	artistName string,
+	file string) (track *Track, err error) {
 	// TODO
-	return track, nil 
+	return track, nil
 }
 
-func (dao *DataBaseAccessObject) BulkCreateTracks(tracks []*Track) (err error){
+func (dao *DataBaseAccessObject) BulkCreateTracks(tracks []*Track) (err error) {
 	// TODO
 	return nil
 }
 
-
 func (dao *DataBaseAccessObject) SearchTrackByTittle(ctx context.Context) (tracks []*Track, err error) {
 	// TODO
-	return tracks, nil	
+	return tracks, nil
 }
 
 func (dao *DataBaseAccessObject) SearchTrackByArtistName(ctx context.Context) (tracks []*Track, err error) {
