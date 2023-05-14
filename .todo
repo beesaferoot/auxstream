@@ -1,6 +1,6 @@
 Backend check list 
-[-] create database schema
-[-] design db model 
+[+] create database schema
+[+] design db model 
 [-] implement /search endpoint
 [-] implement /upload_batch endpoint 
 [-] add some auth protection on /upload_batch endpoint 
