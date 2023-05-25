@@ -2,7 +2,6 @@ package tests
 
 import (
 	store "auxstream/file_system"
-	"fmt"
 	"os"
 	"testing"
 
@@ -19,19 +18,19 @@ func TestCreateStore(t *testing.T) {
 
 func TestSaveFile(t *testing.T) {
 	var lstore store.FileSystem = store.NewStore(baseLocation)
-	lstore.Save("hello_world_test.txt", []byte("hello world"))
-	lstore.Save("second_entry.txt", []byte("second file content"))
-	defer lstore.Remove("hello_world_test.txt")
-	defer lstore.Remove("second_entry.txt")
+	file1, _ := lstore.Save([]byte("hello world"))
+	file2, _ := lstore.Save([]byte("second file content"))
+	defer lstore.Remove(file1)
+	defer lstore.Remove(file2)
 	require.Equal(t, 2, lstore.Writes())
 }
 
 func TestReadFile(t *testing.T) {
 	var lstore store.FileSystem = store.NewStore(baseLocation)
 	write_bytes := []byte("hello world")
-	lstore.Save("hello_world_test.txt", write_bytes)
-	defer lstore.Remove("hello_world_test.txt")
-	file, err := lstore.Read("hello_world_test.txt")
+	fileName, _ := lstore.Save(write_bytes)
+	defer lstore.Remove(fileName)
+	file, err := lstore.Read(fileName)
 	require.NoError(t, err)
 	read_bytes := make([]byte, len(write_bytes))
 	_, err = file.Read(read_bytes)
@@ -42,16 +41,21 @@ func TestReadFile(t *testing.T) {
 
 func TestBulkSave(t *testing.T) {
 	var lstore store.FileSystem = store.NewStore(baseLocation)
-	groupfiles := [][]byte{}
-	file_names := []string{}
+	var groupfiles [][]byte
+	var fileNames []string
+
 	for i := 0; i < 10; i++ {
 		groupfiles = append(groupfiles, []byte("hello world"))
-		file_names = append(file_names, fmt.Sprintf("text_bulk_save_%d", i))
 	}
-	lstore.BulkSave(file_names, groupfiles)
+	buf := make(chan string, len(groupfiles))
+	lstore.BulkSave(buf, groupfiles)
+	for fileName := range buf {
+		fileNames = append(fileNames, fileName)
+	}
 	require.Equal(t, 10, lstore.Writes())
-	for _, file_name := range file_names {
-		err := lstore.Remove(file_name)
+	require.Equal(t, 10, len(fileNames))
+	for _, fileName := range fileNames {
+		err := lstore.Remove(fileName)
 		require.NoError(t, err)
 	}
 }

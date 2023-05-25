@@ -9,10 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-/*
-	Database Access Object:
-		This struct will be the only db access to the outside world.
-*/
+// DataBaseAccessObject This struct will be the only db access to the outside world.
 type DataBaseAccessObject struct {
 	conn *pgx.Conn
 }
@@ -38,10 +35,12 @@ func New(config DBconfig, context context.Context) *DataBaseAccessObject {
 	conn, err := pgx.Connect(context, config.Url)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		_, err := fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		if err != nil {
+			return nil
+		}
 		os.Exit(1)
 	}
-
 	return &DataBaseAccessObject{conn: conn}
 }
 
@@ -54,7 +53,13 @@ func (dao *DataBaseAccessObject) CreateTrack(
 	title string,
 	artistName string,
 	file string) (track *Track, err error) {
-	// TODO
+	artist := &Artist{Name: artistName}
+	err = artist.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+	track = &Track{Title: title, File: file, ArtistId: artist.Id}
+	err = track.Commit(ctx)
 	return track, nil
 }
 
@@ -63,12 +68,11 @@ func (dao *DataBaseAccessObject) BulkCreateTracks(tracks []*Track) (err error) {
 	return nil
 }
 
-func (dao *DataBaseAccessObject) SearchTrackByTittle(ctx context.Context) (tracks []*Track, err error) {
-	// TODO
-	return tracks, nil
+func (dao *DataBaseAccessObject) SearchTrackByTittle(ctx context.Context, title string) (tracks []*Track, err error) {
+	return GetTrackByTitle(ctx, title)
 }
 
-func (dao *DataBaseAccessObject) SearchTrackByArtistName(ctx context.Context) (tracks []*Track, err error) {
-	// TODO
-	return tracks, nil
+func (dao *DataBaseAccessObject) SearchTrackByArtist(ctx context.Context,
+	artist string) (tracks []*Track, err error) {
+	return GetTrackByArtist(ctx, artist)
 }

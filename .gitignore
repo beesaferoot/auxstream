@@ -9,3 +9,7 @@ bin
 
 # env config
 .env
+
+uploads
+.idea
+build

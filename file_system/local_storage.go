@@ -1,11 +1,14 @@
 package filesystem
 
 import (
+	"github.com/google/uuid"
+	"log"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
-/* FileSystem interface definition over localstorage */
+// LocalStore a FileSystem interface definition over localstorage
 type LocalStore struct {
 	writes       int
 	reads        int
@@ -24,37 +27,43 @@ func (l *LocalStore) Writes() int {
 	return l.writes
 }
 
-func (l *LocalStore) Save(file_name string, raw []byte) (err error) {
-	file := NewFile(l.baseLocation + "/" + file_name)
+func (l *LocalStore) Save(raw []byte) (filename string, err error) {
+	filename = genFileName()
+	file := NewFile(filepath.Join(l.baseLocation, filename))
 	_, err = file.Write(raw)
 	l.writes++
 	return
 }
 
-func (l *LocalStore) Read(file_name string) (file File, err error) {
-	file, err = OpenFile(l.baseLocation + "/" + file_name)
+func (l *LocalStore) Read(fileName string) (file File, err error) {
+	file, err = OpenFile(filepath.Join(l.baseLocation, fileName))
 	l.reads++
 	return
 }
 
-func (l *LocalStore) BulkSave(list_of_file_names []string, list_of_raw [][]byte) {
+func (l *LocalStore) BulkSave(buf chan<- string, listOfRaw [][]byte) {
 	var wg sync.WaitGroup
-
-	for i, raw := range list_of_raw {
+	for _, raw := range listOfRaw {
 		wg.Add(1)
-		go func(file_name string, raw []byte) {
+		go func(raw []byte) {
 			defer wg.Done()
-			l.Save(file_name, raw)
-		}(list_of_file_names[i], raw)
+			fileName, err := l.Save(raw)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			buf <- fileName
+		}(raw)
 	}
 	wg.Wait()
+	close(buf)
 }
 
-func (l *LocalStore) Remove(file_name string) error {
-	return os.Remove(l.baseLocation + "/" + file_name)
+func (l *LocalStore) Remove(fileName string) error {
+	return os.Remove(filepath.Join(l.baseLocation, fileName))
 }
 
-/* File interface definition over localstorage */
+// LocalFile  File interface definition over localstorage
 type LocalFile struct {
 	filePath string
 	content  *os.File
@@ -89,3 +98,11 @@ func (f *LocalFile) Read(p []byte) (n int, err error) {
 func (f *LocalFile) Write(p []byte) (n int, err error) {
 	return f.content.Write(p)
 }
+
+func genFileName() string {
+	return "aud_file_" + uuid.New().String() + ".mp3"
+}
+
+var cwd, _ = os.Getwd()
+var rootDir, _ = filepath.Abs(cwd)
+var Store = NewStore(filepath.Join(rootDir, "uploads"))
