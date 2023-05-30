@@ -7,3 +7,6 @@ teardown-db:
 
 test: 
 	go test -v ./tests
+
+run:
+	go run main.go

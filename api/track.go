@@ -11,7 +11,6 @@ import (
 
 // FetchTracksHandler fetch tracks by artist (limit results < 100)
 func FetchTracksHandler(c *gin.Context) {
-
 	artist := c.Query("artist")
 	tracks, err := db.DAO.SearchTrackByArtist(c, artist)
 	if err != nil {

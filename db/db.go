@@ -3,18 +3,28 @@ package db
 import (
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgconn"
 	"log"
 	"os"
 
 	"github.com/jackc/pgx/v5"
 )
 
-// DataBaseAccessObject This struct will be the only db access to the outside world.
-type DataBaseAccessObject struct {
-	conn *pgx.Conn
+// dbConn  abstraction over pgx.Conn which allows for mock testing
+type dbConn interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, optionsAndArgs ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, optionsAndArgs ...interface{}) pgx.Row
+	Close(ctx context.Context) error
 }
 
-var DAO = New(DBconfig{Url: os.Getenv("DATABASE_URL")}, context.Background())
+// DataBaseAccessObject This struct will be the only db access to the outside world.
+type DataBaseAccessObject struct {
+	conn dbConn
+}
+
+var DAO *DataBaseAccessObject
 
 func (dao *DataBaseAccessObject) setupDB() {
 
@@ -44,6 +54,10 @@ func New(config DBconfig, context context.Context) *DataBaseAccessObject {
 	return &DataBaseAccessObject{conn: conn}
 }
 
+func NewWithMockConn(conn dbConn) *DataBaseAccessObject {
+	return &DataBaseAccessObject{conn: conn}
+}
+
 /*
 	DB operations
 */
@@ -54,12 +68,22 @@ func (dao *DataBaseAccessObject) CreateTrack(
 	artistName string,
 	file string) (track *Track, err error) {
 	artist := &Artist{Name: artistName}
-	err = artist.Commit(ctx)
+	trx, err := dao.conn.Begin(ctx)
+	// Rollback db transaction on failure
+	defer func() {
+		if err != nil {
+			_ = trx.Rollback(ctx)
+		}
+	}()
+	if err != nil {
+		return nil, err
+	}
+	err = artist.Commit(ctx, trx)
 	if err != nil {
 		return nil, err
 	}
 	track = &Track{Title: title, File: file, ArtistId: artist.Id}
-	err = track.Commit(ctx)
+	err = track.Commit(ctx, trx)
 	return track, nil
 }
 

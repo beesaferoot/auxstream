@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -19,27 +20,25 @@ type Artist struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (track *Track) Commit(ctx context.Context) (err error) {
+func (track *Track) Commit(ctx context.Context, trx pgx.Tx) (err error) {
 	stmt := `INSERT INTO auxstream.tracks (title, artist_id, file) 
              VALUES ($1, $2, $3) 
              RETURNING id, created_at
              `
-	row := DAO.conn.QueryRow(ctx, stmt, track.Title, track.ArtistId, track.File)
+	row := trx.QueryRow(ctx, stmt, track.Title, track.ArtistId, track.File)
 
 	err = row.Scan(&track.Id, &track.CreatedAt)
-
 	return
 }
 
-func (artist *Artist) Commit(ctx context.Context) (err error) {
+func (artist *Artist) Commit(ctx context.Context, trx pgx.Tx) (err error) {
 	stmt := `INSERT INTO auxstream.artists (name) 
 			 VALUES ($1) 
 			 RETURNING id, created_at
 			 `
-	row := DAO.conn.QueryRow(ctx, stmt, artist.Name)
+	row := trx.QueryRow(ctx, stmt, artist.Name)
 
 	err = row.Scan(&artist.Id, &artist.CreatedAt)
-
 	return
 }
 
