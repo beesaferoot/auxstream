@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"log"
 	"os"
@@ -28,6 +29,9 @@ func (l *LocalStore) Writes() int {
 }
 
 func (l *LocalStore) Save(raw []byte) (filename string, err error) {
+	if len(raw) < 1 {
+		return filename, fmt.Errorf("empty file")
+	}
 	filename = genFileName()
 	file := NewFile(filepath.Join(l.baseLocation, filename))
 	_, err = file.Write(raw)
@@ -50,6 +54,7 @@ func (l *LocalStore) BulkSave(buf chan<- string, listOfRaw [][]byte) {
 			fileName, err := l.Save(raw)
 			if err != nil {
 				log.Println(err)
+				buf <- ""
 				return
 			}
 			buf <- fileName

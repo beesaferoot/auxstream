@@ -1,8 +1,8 @@
 Backend check list 
 [+] create database schema
 [+] design db model 
-[-] implement /search endpoint
-[-] implement /upload_batch endpoint 
+[+] implement /search endpoint
+[+] implement /upload_batch_track endpoint
 [-] add some auth protection on /upload_batch endpoint 
 [-] serve audio files (stream from client)
 [-] support downloading 

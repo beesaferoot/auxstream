@@ -7,6 +7,7 @@ func SetupRouter() *gin.Engine {
 
 	// POST routes
 	r.POST("/upload_track", AddTrackHandler)
+	r.POST("/upload_batch_track", BulkTrackUploadHandler)
 	// GET routes
 	r.GET("/search", FetchTracksHandler)
 	return r

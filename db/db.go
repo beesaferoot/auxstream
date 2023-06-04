@@ -17,6 +17,7 @@ type dbConn interface {
 	Query(ctx context.Context, sql string, optionsAndArgs ...interface{}) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, optionsAndArgs ...interface{}) pgx.Row
 	Close(ctx context.Context) error
+	CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error)
 }
 
 // DataBaseAccessObject This struct will be the only db access to the outside world.
@@ -87,9 +88,8 @@ func (dao *DataBaseAccessObject) CreateTrack(
 	return track, nil
 }
 
-func (dao *DataBaseAccessObject) BulkCreateTracks(tracks []*Track) (err error) {
-	// TODO
-	return nil
+func (dao *DataBaseAccessObject) BulkCreateTracks(ctx context.Context, trackTitles []string, artistId int, fileNames []string) (rows int64, err error) {
+	return BulkCreateTrack(ctx, trackTitles, artistId, fileNames)
 }
 
 func (dao *DataBaseAccessObject) SearchTrackByTittle(ctx context.Context, title string) (tracks []*Track, err error) {

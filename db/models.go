@@ -32,10 +32,19 @@ func (track *Track) Commit(ctx context.Context, trx pgx.Tx) (err error) {
 }
 
 func (artist *Artist) Commit(ctx context.Context, trx pgx.Tx) (err error) {
-	stmt := `INSERT INTO auxstream.artists (name) 
-			 VALUES ($1) 
-			 RETURNING id, created_at
-			 `
+	// This query ensures we don't create a new artist record if we already have one
+	stmt := `
+	WITH get AS (
+        SELECT id, created_at FROM auxstream.artists   WHERE name=$1
+    ), new AS (
+    INSERT INTO auxstream.artists (name) VALUES ($1)
+    ON CONFLICT (name) DO NOTHING
+    RETURNING id, created_at
+    )
+	SELECT id, created_at FROM get
+	UNION ALL
+	SELECT id, created_at FROM new;
+	`
 	row := trx.QueryRow(ctx, stmt, artist.Name)
 
 	err = row.Scan(&artist.Id, &artist.CreatedAt)
@@ -94,4 +103,19 @@ func GetTrackByArtist(ctx context.Context, artist string) (tracks []*Track, err 
 		return nil, err
 	}
 	return tracks, nil
+}
+
+func BulkCreateTrack(ctx context.Context, trackTitles []string, artistId int, fileNames []string) (count int64, err error) {
+	var rows [][]interface{}
+
+	for idx, title := range trackTitles {
+		rows = append(rows, []interface{}{title, artistId, fileNames[idx]})
+	}
+	count, err = DAO.conn.CopyFrom(
+		ctx,
+		pgx.Identifier{"auxstream", "tracks"},
+		[]string{"title", "artist_id", "file"},
+		pgx.CopyFromRows(rows),
+	)
+	return count, err
 }
