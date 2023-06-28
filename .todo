@@ -3,7 +3,7 @@ Backend check list
 [+] design db model 
 [+] implement /search endpoint
 [+] implement /upload_batch_track endpoint
-[-] add some auth protection on /upload_batch endpoint 
+[+] add some auth protection on /upload_batch_track endpoint
 [-] serve audio files (stream from client)
 [-] support downloading 
 

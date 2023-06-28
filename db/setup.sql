@@ -16,3 +16,10 @@ CREATE TABLE IF NOT EXISTS auxstream.tracks (
     file text not null,
     created_at timestamp default CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS auxstream.users (
+    id serial primary key,
+    username text not null,
+    password_hash text not null,
+    created_at timestamp default CURRENT_TIMESTAMP
+)

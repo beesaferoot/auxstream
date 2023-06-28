@@ -100,3 +100,16 @@ func (dao *DataBaseAccessObject) SearchTrackByArtist(ctx context.Context,
 	artist string) (tracks []*Track, err error) {
 	return GetTrackByArtist(ctx, artist)
 }
+
+func CreateUser(ctx context.Context, username, passwordHash string) (err error) {
+	user := &User{Username: username, PasswordHash: passwordHash}
+	return user.Commit(ctx)
+}
+
+func GetUser(ctx context.Context, id string) (user *User, err error) {
+	return GetUserById(ctx, id)
+}
+
+func GetUserByUsername(ctx context.Context, username string) (user *User, err error) {
+	return GetUserByUsername(ctx, username)
+}

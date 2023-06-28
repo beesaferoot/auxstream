@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+type User struct {
+	Id           int       `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"password_hash"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type Track struct {
 	Id        int       `json:"id"`
 	Title     string    `json:"title"`
@@ -18,6 +25,16 @@ type Artist struct {
 	Id        int       `json:"id"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+func (user *User) Commit(ctx context.Context) (err error) {
+	stmt := `INSERT INTO auxstream.users (username, password_hash)
+			 VALUES ($1, $2) 
+			 RETURNING id, created_at
+			 `
+	row := DAO.conn.QueryRow(ctx, stmt, user.Username, user.PasswordHash)
+	err = row.Scan(&user.Id, &user.CreatedAt)
+	return
 }
 
 func (track *Track) Commit(ctx context.Context, trx pgx.Tx) (err error) {
@@ -118,4 +135,26 @@ func BulkCreateTrack(ctx context.Context, trackTitles []string, artistId int, fi
 		pgx.CopyFromRows(rows),
 	)
 	return count, err
+}
+
+func GetUserById(ctx context.Context, id string) (user *User, err error) {
+	stmt := `SELECT id, username, password_hash, created_at
+ 			 FROM auxstream.users
+ 			 WHERE id = $1`
+	row := DAO.conn.QueryRow(ctx, stmt, id)
+
+	err = row.Scan(&user.Id, &user.Username, &user.PasswordHash, &user.CreatedAt)
+
+	return
+}
+
+func GetUserByUser(ctx context.Context, username string) (user *User, err error) {
+	stmt := `SELECT id, username, password_hash, created_at
+ 			 FROM auxstream.users
+ 			 WHERE id = $1`
+	row := DAO.conn.QueryRow(ctx, stmt, username)
+
+	err = row.Scan(&user.Id, &user.Username, &user.PasswordHash, &user.CreatedAt)
+
+	return
 }
