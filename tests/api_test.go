@@ -7,12 +7,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/imroc/req"
+	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v2"
 	"github.com/stretchr/testify/require"
 	"log"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -101,9 +104,50 @@ func TestHTTPSearchByArtist(t *testing.T) {
 	resp, err := req.Get(tserver.URL + "/search?artist=Hike")
 
 	require.NoError(t, err)
-	//require.Equal(t, resp.Response().StatusCode, 200)
+	require.Equal(t, resp.Response().StatusCode, 200)
 	data := &map[string]interface{}{}
 	err = resp.ToJSON(data)
 	require.NoError(t, err)
 	fmt.Println("response body: ", data)
+}
+
+func TestHTTPTrackUploadBatch(t *testing.T) {
+
+	teardown := setupTest(t)
+	defer teardown(t)
+	testRecordCnt := 30
+	mockConn.ExpectCopyFrom(pgx.Identifier{"auxstream", "tracks"}, []string{"title", "artist_id", "file"}).
+		WillReturnResult(int64(testRecordCnt))
+	fs.Store = fs.NewStore(os.TempDir())
+	var err error
+	var trackFiles []req.FileUpload
+
+	artistId := 2
+	audioFilePath := filepath.Join(testDataPath, "audio", "audio.mp3")
+
+	tserver := httptest.NewServer(router)
+
+	for i := 0; i < testRecordCnt; i++ {
+		file, err := os.Open(audioFilePath)
+		require.NoError(t, err)
+		trackFiles = append(trackFiles, req.FileUpload{
+			FieldName: "track_files",
+			File:      file,
+			FileName:  "audio",
+		})
+	}
+
+	formData := url.Values{}
+	formData.Add("artist_id", strconv.Itoa(artistId))
+	for i := 0; i < testRecordCnt; i++ {
+		formData.Add("track_title", fmt.Sprintf("#%d", i))
+	}
+
+	post, err := req.Post(tserver.URL+"/upload_batch_track", formData, trackFiles)
+	require.NoError(t, err)
+	data := &map[string]interface{}{}
+	err = post.ToJSON(data)
+	require.NoError(t, err)
+	fmt.Println("response body: ", data)
+	require.Equal(t, post.Response().StatusCode, 200)
 }

@@ -136,7 +136,7 @@ func processFiles(files []*multipart.FileHeader) (fileNames []string, err error)
 
 	buf_channel := make(chan string, len(groupfiles))
 
-	// currently write files to disk
+	// concurrently write files to disk
 	fs.Store.BulkSave(buf_channel, groupfiles)
 
 	for fileName := range buf_channel {
