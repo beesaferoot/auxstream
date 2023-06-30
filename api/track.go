@@ -16,7 +16,7 @@ func FetchTracksHandler(c *gin.Context) {
 	tracks, err := db.DAO.SearchTrackByArtist(c, artist)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": err.Error(),
+			"error": err.Error(),
 		})
 		return
 	}
