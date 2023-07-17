@@ -20,10 +20,19 @@ func SetupRouter() *gin.Engine {
 	r.POST("/upload_batch_track", CookieAuthMiddleware, BulkTrackUploadHandler)
 	r.POST("/login", Login)
 	r.POST("/signup", Signup)
-	
+
 	// GET routes
 	r.GET("/search", FetchTracksHandler)
 	r.GET("/logout", Logout)
+
+	return r
+}
+
+func SetupTestRouter() *gin.Engine {
+	r := gin.Default()
+	r.POST("/upload_track", AddTrackHandler)
+	r.POST("/upload_batch_track", BulkTrackUploadHandler)
+	r.GET("/search", FetchTracksHandler)
 
 	return r
 }

@@ -23,9 +23,9 @@ import (
 var cwd, _ = os.Getwd()
 var testDataPath = filepath.Join(cwd, "testdata")
 var mockConn pgxmock.PgxConnIface
-var router = api.SetupRouter()
+var router = api.SetupTestRouter()
 
-func setupTest(t *testing.T) func(t *testing.T) {
+func setupTest(_ *testing.T) func(t *testing.T) {
 	var err error
 	mockConn, err = pgxmock.NewConn()
 	if err != nil {
@@ -36,7 +36,7 @@ func setupTest(t *testing.T) func(t *testing.T) {
 	return tearDownTest
 }
 
-func tearDownTest(t *testing.T) {
+func tearDownTest(_ *testing.T) {
 	_ = mockConn.Close(context.Background())
 }
 
@@ -56,7 +56,6 @@ func TestHTTPAddTrack(t *testing.T) {
 	// mock real store with test store
 	fs.Store = fs.NewStore(os.TempDir())
 	tserver := httptest.NewServer(router)
-
 	defer tserver.Close()
 
 	title := "Sample Title"
