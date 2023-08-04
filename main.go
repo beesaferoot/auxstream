@@ -3,13 +3,21 @@ package main
 import (
 	"auxstream/api"
 	"auxstream/db"
+	"auxstream/utils"
 	"context"
-	"os"
+	"log"
 )
 
 func main() {
-	db.DAO = db.New(db.DBconfig{Url: os.Getenv("DATABASE_URL")}, context.Background())
+	config, err := utils.LoadConfig(".")
+	if err != nil {
+		log.Fatal("could not load env config: ", err.Error())
+	}
+	db.DAO = db.New(config, context.Background())
 	router := api.SetupRouter()
-	router.Run(":5009")
+	err = router.Run(":5009")
+	if err != nil {
+		log.Fatalln("failed to start server")
+	}
 
 }

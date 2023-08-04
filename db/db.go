@@ -1,6 +1,7 @@
 package db
 
 import (
+	"auxstream/utils"
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -38,12 +39,8 @@ func (dao *DataBaseAccessObject) close(context context.Context) {
 	}
 }
 
-type DBconfig struct {
-	Url string
-}
-
-func New(config DBconfig, context context.Context) *DataBaseAccessObject {
-	conn, err := pgx.Connect(context, config.Url)
+func New(config utils.Config, context context.Context) *DataBaseAccessObject {
+	conn, err := pgx.Connect(context, config.DBUrl)
 
 	if err != nil {
 		_, err := fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
