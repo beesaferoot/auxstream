@@ -69,6 +69,7 @@ func (artist *Artist) Commit(ctx context.Context, trx pgx.Tx) (err error) {
 }
 
 func GetTrackByTitle(ctx context.Context, title string) (tracks []*Track, err error) {
+	tracks = []*Track{}
 	stmt := `SELECT id, title, artist_id, file, created_at 
 			 FROM auxstream.tracks 
 			 WHERE title = $1
@@ -96,6 +97,7 @@ func GetTrackByTitle(ctx context.Context, title string) (tracks []*Track, err er
 }
 
 func GetTrackByArtist(ctx context.Context, artist string) (tracks []*Track, err error) {
+	tracks = []*Track{}
 	stmt := `SELECT t.id, t.title, t.artist_id, t.file, t.created_at
 	FROM auxstream.tracks AS t
 	JOIN auxstream.artists AS a ON t.artist_id = a.id
@@ -149,9 +151,10 @@ func GetUserById(ctx context.Context, id string) (user *User, err error) {
 }
 
 func GetUserByUser(ctx context.Context, username string) (user *User, err error) {
+	user = &User{}
 	stmt := `SELECT id, username, password_hash, created_at
  			 FROM auxstream.users
- 			 WHERE id = $1`
+ 			 WHERE username = $1`
 	row := DAO.conn.QueryRow(ctx, stmt, username)
 
 	err = row.Scan(&user.Id, &user.Username, &user.PasswordHash, &user.CreatedAt)

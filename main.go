@@ -15,6 +15,11 @@ func main() {
 	}
 	db.DAO = db.New(config, context.Background())
 	router := api.SetupRouter()
+	router.ForwardedByClientIP = true
+	err = router.SetTrustedProxies([]string{"127.0.0.1"})
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
 	err = router.Run(":5009")
 	if err != nil {
 		log.Fatalln("failed to start server")

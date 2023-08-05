@@ -17,6 +17,14 @@ type LocalStore struct {
 }
 
 func NewStore(path string) *LocalStore {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		// Create the directory
+		err := os.Mkdir(path, 0744)
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
+	}
 	return &LocalStore{baseLocation: path, reads: 0, writes: 0}
 }
 
@@ -33,7 +41,10 @@ func (l *LocalStore) Save(raw []byte) (filename string, err error) {
 		return filename, fmt.Errorf("empty file")
 	}
 	filename = genFileName()
-	file := NewFile(filepath.Join(l.baseLocation, filename))
+	file, err := NewFile(filepath.Join(l.baseLocation, filename))
+	if err != nil {
+		return "", err
+	}
 	_, err = file.Write(raw)
 	l.writes++
 	return
@@ -74,9 +85,13 @@ type LocalFile struct {
 	content  *os.File
 }
 
-func NewFile(filePath string) *LocalFile {
-	content, _ := os.Create(filePath)
-	return &LocalFile{filePath: filePath, content: content}
+func NewFile(filePath string) (file *LocalFile, err error) {
+	content, err := os.Create(filePath)
+	if err != nil {
+		return nil, err
+	}
+	file = &LocalFile{filePath: filePath, content: content}
+	return file, nil
 }
 
 func OpenFile(filePath string) (*LocalFile, error) {

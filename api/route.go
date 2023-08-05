@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
@@ -11,7 +12,15 @@ func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
 	sessionSecret := []byte(os.Getenv("sessionsecret"))
-
+	// Allow cors origin
+	config := cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"PUT", "PATCH", "POST", "GET", "OPTIONS", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	})
+	r.Use(config)
 	v1 := r.Group("/api/v1")
 
 	// Set up the cookie store for session management

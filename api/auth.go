@@ -34,11 +34,13 @@ func Signup(c *gin.Context) {
 	if err != nil {
 		fmt.Println("password hash failure: ", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
+		return
 	}
 	err = db.CreateUser(c, username, pHash)
 	if err != nil {
 		fmt.Println("CreateUser: ", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "successfully signed up user"})
@@ -50,7 +52,7 @@ func Login(c *gin.Context) {
 	password := c.PostForm("password")
 
 	// Validate form input
-	if strings.Trim(username, " ") == "" || strings.Trim(password, " ") == "" {
+	if strings.Trim(username, "") == " " || strings.Trim(password, " ") == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "parameters can't be empty"})
 		return
 	}

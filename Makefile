@@ -11,7 +11,7 @@ teardown-db:
 	migrate -path db/migration -database "postgresql://root:secret@localhost:5432/auxstreamdb?sslmode=disable" --verbose down
 
 test: 
-	go test -v -cover ./tests
+	go test -v ./tests -coverpkg=./...
 
 run:
 	go run main.go

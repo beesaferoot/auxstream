@@ -71,6 +71,9 @@ func (dao *DataBaseAccessObject) CreateTrack(
 	defer func() {
 		if err != nil {
 			_ = trx.Rollback(ctx)
+		} else {
+			_ = trx.Commit(ctx)
+			return
 		}
 	}()
 	if err != nil {
