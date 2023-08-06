@@ -1,17 +1,17 @@
 package api
 
 import (
+	"auxstream/utils"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
-	"os"
 )
 
-func SetupRouter() *gin.Engine {
+func SetupRouter(envConfig utils.Config) *gin.Engine {
 	r := gin.Default()
 
-	sessionSecret := []byte(os.Getenv("sessionsecret"))
+	sessionSecret := []byte(envConfig.SessionString)
 	// Allow cors origin
 	config := cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
@@ -33,8 +33,10 @@ func SetupRouter() *gin.Engine {
 	v1.POST("/signup", Signup)
 
 	// GET routes
-	v1.GET("/search", FetchTracksHandler)
+	v1.GET("/tracks", FetchTracksHandler)
+	v1.GET("/search", FetchTracksByArtistHandler)
 	v1.GET("/logout", Logout)
+	v1.Static("/serve", "./uploads")
 
 	return r
 }
@@ -43,7 +45,8 @@ func SetupTestRouter() *gin.Engine {
 	r := gin.Default()
 	r.POST("/upload_track", AddTrackHandler)
 	r.POST("/upload_batch_track", BulkTrackUploadHandler)
-	r.GET("/search", FetchTracksHandler)
+	r.GET("/tracks", FetchTracksHandler)
+	r.GET("/search", FetchTracksByArtistHandler)
 
 	return r
 }

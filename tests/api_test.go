@@ -150,3 +150,31 @@ func TestHTTPTrackUploadBatch(t *testing.T) {
 	fmt.Println("response body: ", data)
 	require.Equal(t, post.Response().StatusCode, 200)
 }
+
+func TestHTTPFetchTracks(t *testing.T) {
+	teardown := setupTest(t)
+	defer teardown(t)
+
+	columns := []string{"id", "title", "artist_id", "file", "created_at"}
+	mockConn.ExpectQuery(`
+	SELECT id, title, artist_id, file, created_at
+	`).
+		WithArgs(int32(2), int32(0)).
+		WillReturnRows(pgxmock.NewRows(columns).
+			AddRow(1, "Title", 1, "Test file", time.Now()).
+			AddRow(1, "Title", 1, "Test file", time.Now()).
+			AddRow(1, "Title", 1, "Test file", time.Now()))
+	tserver := httptest.NewServer(router)
+	defer tserver.Close()
+
+	resp, err := req.Get(tserver.URL + "/tracks?pagesize=2&pagenumber=1")
+
+	require.NoError(t, err)
+	require.Equal(t, resp.Response().StatusCode, 200)
+	data := &map[string]interface{}{}
+	err = resp.ToJSON(data)
+	require.NoError(t, err)
+	require.NotZero(t, data)
+	resData := (*data)["data"]
+	require.NotEmpty(t, resData)
+}

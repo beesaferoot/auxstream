@@ -68,6 +68,35 @@ func (artist *Artist) Commit(ctx context.Context, trx pgx.Tx) (err error) {
 	return
 }
 
+func GetTracks(ctx context.Context, limit int32, offset int32) (tracks []*Track, err error) {
+	tracks = []*Track{}
+	stmt := `SELECT id, title, artist_id, file, created_at 
+			 FROM auxstream.tracks 
+			 LIMIT $1 
+			 OFFSET $2
+			 `
+	rows, err := DAO.conn.Query(ctx, stmt, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		track := &Track{}
+		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.File, &track.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		tracks = append(tracks, track)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+	return tracks, nil
+}
+
 func GetTrackByTitle(ctx context.Context, title string) (tracks []*Track, err error) {
 	tracks = []*Track{}
 	stmt := `SELECT id, title, artist_id, file, created_at 
@@ -83,7 +112,7 @@ func GetTrackByTitle(ctx context.Context, title string) (tracks []*Track, err er
 
 	for rows.Next() {
 		track := &Track{}
-		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.CreatedAt)
+		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.File, &track.CreatedAt)
 		if err != nil {
 			return nil, err
 		}

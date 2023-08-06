@@ -14,7 +14,7 @@ func main() {
 		log.Fatal("could not load env config: ", err.Error())
 	}
 	db.DAO = db.New(config, context.Background())
-	router := api.SetupRouter()
+	router := api.SetupRouter(config)
 	router.ForwardedByClientIP = true
 	err = router.SetTrustedProxies([]string{"127.0.0.1"})
 	if err != nil {

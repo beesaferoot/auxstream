@@ -10,10 +10,30 @@ import (
 	"strconv"
 )
 
-// FetchTracksHandler fetch tracks by artist (limit results < 100)
-func FetchTracksHandler(c *gin.Context) {
+// FetchTracksByArtistHandler fetch tracks by artist (limit results < 100)
+func FetchTracksByArtistHandler(c *gin.Context) {
 	artist := c.Query("artist")
 	tracks, err := db.DAO.SearchTrackByArtist(c, artist)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": tracks,
+	})
+
+}
+
+// FetchTracksHandler fetch paginated tracks with limit on page size
+func FetchTracksHandler(c *gin.Context) {
+	pagesize := c.Query("pagesize")
+	pagenumber := c.Query("pagenumber")
+
+	limit, _ := strconv.Atoi(pagesize)
+	offset, _ := strconv.Atoi(pagenumber)
+
+	tracks, err := db.DAO.GetTracks(c, int32(limit), int32((offset-1)*limit))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
 		return
