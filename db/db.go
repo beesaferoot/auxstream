@@ -4,11 +4,11 @@ import (
 	"auxstream/utils"
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"gopkg.in/validator.v2"
 	"log"
 	"os"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // dbConn  abstraction over pgx.Conn which allows for mock testing
@@ -60,32 +60,26 @@ func NewWithMockConn(conn dbConn) *DataBaseAccessObject {
 	DB operations
 */
 
+func (dao *DataBaseAccessObject) CreateArtist(ctx context.Context, name string) (artist *Artist, err error) {
+	artist = &Artist{Name: name}
+	if err := validator.Validate(artist); err != nil {
+		return nil, err
+	}
+	err = artist.Commit(ctx)
+	return artist, err
+}
+
 func (dao *DataBaseAccessObject) CreateTrack(
 	ctx context.Context,
 	title string,
-	artistName string,
+	artistId int,
 	file string) (track *Track, err error) {
-	artist := &Artist{Name: artistName}
-	trx, err := dao.conn.Begin(ctx)
-	// Rollback db transaction on failure
-	defer func() {
-		if err != nil {
-			_ = trx.Rollback(ctx)
-		} else {
-			_ = trx.Commit(ctx)
-			return
-		}
-	}()
-	if err != nil {
+	track = &Track{Title: title, File: file, ArtistId: artistId}
+	if err := validator.Validate(track); err != nil {
 		return nil, err
 	}
-	err = artist.Commit(ctx, trx)
-	if err != nil {
-		return nil, err
-	}
-	track = &Track{Title: title, File: file, ArtistId: artist.Id}
-	err = track.Commit(ctx, trx)
-	return track, nil
+	err = track.Commit(ctx)
+	return track, err
 }
 
 func (dao *DataBaseAccessObject) BulkCreateTracks(ctx context.Context, trackTitles []string, artistId int, fileNames []string) (rows int64, err error) {
@@ -107,6 +101,9 @@ func (dao *DataBaseAccessObject) GetTracks(ctx context.Context, limit int32, off
 
 func CreateUser(ctx context.Context, username, passwordHash string) (err error) {
 	user := &User{Username: username, PasswordHash: passwordHash}
+	if err := validator.Validate(user); err != nil {
+		return err
+	}
 	return user.Commit(ctx)
 }
 

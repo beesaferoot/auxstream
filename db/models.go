@@ -8,14 +8,14 @@ import (
 
 type User struct {
 	Id           int       `json:"id"`
-	Username     string    `json:"username"`
+	Username     string    `json:"username" validate:"min=4,nonzero"`
 	PasswordHash string    `json:"password_hash"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
 type Track struct {
 	Id        int       `json:"id"`
-	Title     string    `json:"title"`
+	Title     string    `json:"title" validate:"nonzero"`
 	ArtistId  int       `json:"artist_id"`
 	File      string    `json:"file"`
 	CreatedAt time.Time `json:"created_at"`
@@ -23,7 +23,7 @@ type Track struct {
 
 type Artist struct {
 	Id        int       `json:"id"`
-	Name      string    `json:"name"`
+	Name      string    `json:"name" validate:"nonzero"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -37,32 +37,25 @@ func (user *User) Commit(ctx context.Context) (err error) {
 	return
 }
 
-func (track *Track) Commit(ctx context.Context, trx pgx.Tx) (err error) {
+func (track *Track) Commit(ctx context.Context) (err error) {
 	stmt := `INSERT INTO auxstream.tracks (title, artist_id, file) 
              VALUES ($1, $2, $3) 
              RETURNING id, created_at
              `
-	row := trx.QueryRow(ctx, stmt, track.Title, track.ArtistId, track.File)
+	row := DAO.conn.QueryRow(ctx, stmt, track.Title, track.ArtistId, track.File)
 
 	err = row.Scan(&track.Id, &track.CreatedAt)
 	return
 }
 
-func (artist *Artist) Commit(ctx context.Context, trx pgx.Tx) (err error) {
+func (artist *Artist) Commit(ctx context.Context) (err error) {
 	// This query ensures we don't create a new artist record if we already have one
 	stmt := `
-	WITH get AS (
-        SELECT id, created_at FROM auxstream.artists   WHERE name=$1
-    ), new AS (
     INSERT INTO auxstream.artists (name) VALUES ($1)
     ON CONFLICT (name) DO NOTHING
-    RETURNING id, created_at
-    )
-	SELECT id, created_at FROM get
-	UNION ALL
-	SELECT id, created_at FROM new;
+	RETURNING id, created_at
 	`
-	row := trx.QueryRow(ctx, stmt, artist.Name)
+	row := DAO.conn.QueryRow(ctx, stmt, artist.Name)
 
 	err = row.Scan(&artist.Id, &artist.CreatedAt)
 	return

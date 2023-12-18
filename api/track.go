@@ -49,7 +49,11 @@ func FetchTracksHandler(c *gin.Context) {
 func AddTrackHandler(c *gin.Context) {
 	form, _ := c.MultipartForm()
 	trackTittle := form.Value["title"][0]
-	trackArtist := form.Value["artist"][0]
+	trackArtistId, err := strconv.Atoi(form.Value["artist_id"][0])
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("artistId should be a valid number"))
+		return
+	}
 	file := form.File["audio"][0]
 	if file.Size <= 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("audio for track not found"))
@@ -67,7 +71,7 @@ func AddTrackHandler(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(store) audio upload failed: %s", err.Error())))
 		return
 	}
-	track, err := db.DAO.CreateTrack(c, trackTittle, trackArtist, fileName)
+	track, err := db.DAO.CreateTrack(c, trackTittle, trackArtistId, fileName)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(db) audio upload failed: %s", err.Error())))
 		return

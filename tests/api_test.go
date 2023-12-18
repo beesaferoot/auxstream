@@ -45,12 +45,8 @@ func TestHTTPAddTrack(t *testing.T) {
 	defer teardown(t)
 
 	columns := []string{"id", "created_at"}
-	mockConn.ExpectBegin()
-	mockConn.ExpectQuery("INSERT INTO auxstream.artists").
-		WithArgs("Sample Artist").
-		WillReturnRows(pgxmock.NewRows(columns).AddRow(1, time.Now()))
 	mockConn.ExpectQuery("INSERT INTO auxstream.tracks").
-		WithArgs("Sample Title", 1, "auffdadf").
+		WithArgs("Sample Title", 1, pgxmock.AnyArg()).
 		WillReturnRows(pgxmock.NewRows(columns).AddRow(1, time.Now()))
 	mockConn.ExpectCommit()
 	// mock real store with test store
@@ -59,7 +55,7 @@ func TestHTTPAddTrack(t *testing.T) {
 	defer tserver.Close()
 
 	title := "Sample Title"
-	artist := "Sample Artist"
+	artistId := 1
 	audioFilePath := filepath.Join(testDataPath, "audio", "audio.mp3")
 	file, err := os.Open(audioFilePath)
 
@@ -67,8 +63,8 @@ func TestHTTPAddTrack(t *testing.T) {
 
 	// Create the request body
 	body := req.Param{
-		"title":  title,
-		"artist": artist,
+		"title":     title,
+		"artist_id": artistId,
 	}
 
 	post, err := req.Post(tserver.URL+"/upload_track", body, req.FileUpload{
