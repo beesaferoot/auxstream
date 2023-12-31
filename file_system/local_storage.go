@@ -14,9 +14,10 @@ type LocalStore struct {
 	writes       int
 	reads        int
 	baseLocation string
+	mu           sync.Mutex
 }
 
-func NewStore(path string) *LocalStore {
+func NewLocalStore(path string) *LocalStore {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		// Create the directory
@@ -46,13 +47,17 @@ func (l *LocalStore) Save(raw []byte) (filename string, err error) {
 		return "", err
 	}
 	_, err = file.Write(raw)
+	l.mu.Lock()
 	l.writes++
+	l.mu.Unlock()
 	return
 }
 
 func (l *LocalStore) Read(fileName string) (file File, err error) {
 	file, err = OpenFile(filepath.Join(l.baseLocation, fileName))
+	l.mu.Lock()
 	l.reads++
+	l.mu.Unlock()
 	return
 }
 
@@ -119,10 +124,14 @@ func (f *LocalFile) Write(p []byte) (n int, err error) {
 	return f.content.Write(p)
 }
 
+func (f *LocalFile) WriteAt(p []byte, off int64) (n int, err error) {
+	return f.content.WriteAt(p, off)
+}
+
 func genFileName() string {
 	return "aud_file_" + uuid.New().String() + ".mp3"
 }
 
 var cwd, _ = os.Getwd()
 var rootDir, _ = filepath.Abs(cwd)
-var Store = NewStore(filepath.Join(rootDir, "uploads"))
+var LStore = NewLocalStore(filepath.Join(rootDir, "uploads"))

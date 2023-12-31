@@ -16,4 +16,8 @@ test:
 run:
 	go run main.go
 
+
+build:
+	go build -o build/auxstream
+
 .PHONY: test run createdb setup-db teardown-db

@@ -66,7 +66,7 @@ func AddTrackHandler(c *gin.Context) {
 	}
 	raw_bytes := make([]byte, file.Size)
 	_, err = raw_file.Read(raw_bytes)
-	fileName, err := fs.Store.Save(raw_bytes)
+	fileName, err := fs.LStore.Save(raw_bytes)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(store) audio upload failed: %s", err.Error())))
 		return
@@ -146,7 +146,7 @@ func processFiles(files []*multipart.FileHeader) (fileNames []string, err error)
 	buf_channel := make(chan string, len(groupfiles))
 
 	// concurrently write files to disk
-	fs.Store.BulkSave(buf_channel, groupfiles)
+	fs.LStore.BulkSave(buf_channel, groupfiles)
 
 	for fileName := range buf_channel {
 		fileNames = append(fileNames, fileName)

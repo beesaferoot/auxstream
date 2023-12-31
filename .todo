@@ -5,9 +5,9 @@ Backend check list
 [+] implement /upload_batch_track endpoint
 [+] add some auth protection on /upload_batch_track endpoint
 [-] serve audio files (stream from client)
-[-] support downloading 
+[-] support downloading
 
 UI check list 
-[-] search interface 
-[-] audio pane display 
+[+] search interface
+[+] audio pane display
 [-] audio player interface 

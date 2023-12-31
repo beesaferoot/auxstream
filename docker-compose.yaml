@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  postgres:
+    restart: always
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=auxstreamdb
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5009:5009"
+    environment:
+      - DATABASE_URL=postgresql://postgres:secret@postgres:5432/auxstreamdb?sslmode=disable
+
+    restart: on-failure
+    depends_on:
+      - postgres
