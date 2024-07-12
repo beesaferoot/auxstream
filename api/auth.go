@@ -3,11 +3,12 @@ package api
 import (
 	"auxstream/db"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
-	"net/http"
-	"strings"
 )
 
 // cookie based auth session
@@ -36,7 +37,7 @@ func Signup(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
 		return
 	}
-	err = db.CreateUser(c, username, pHash)
+	err = db.DAO.CreateUser(c, username, pHash)
 	if err != nil {
 		fmt.Println("CreateUser: ", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
@@ -57,7 +58,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	user, err := db.GetUserByUser(c, username)
+	user, err := db.DAO.GetUserWithUsername(c, username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
 		return

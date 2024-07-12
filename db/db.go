@@ -4,11 +4,12 @@ import (
 	"auxstream/utils"
 	"context"
 	"fmt"
+	"log"
+	"os"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gopkg.in/validator.v2"
-	"log"
-	"os"
 )
 
 // dbConn  abstraction over pgx.Conn which allows for mock testing
@@ -22,6 +23,25 @@ type dbConn interface {
 }
 
 // DataBaseAccessObject This struct will be the only db access to the outside world.
+
+type DBAccess interface {
+	// track
+	CreateArtist(ctx context.Context, name string) (*Artist, error)
+	CreateTrack(
+		ctx context.Context,
+		title string,
+		artistId int,
+		file string) (track *Track, err error)
+	BulkCreateTracks(ctx context.Context, trackTitles []string, artistId int, fileNames []string) (rows int64, err error)
+	SearchTrackByTittle(ctx context.Context, title string) (tracks []*Track, err error)
+	GetTracks(ctx context.Context, limit int32, offset int32) (tracks []*Track, err error)
+
+	// user
+	CreateUser(ctx context.Context, username, passwordHash string) (err error)
+	GetUserWithId(ctx context.Context, id string) (user *User, err error)
+	GetUserWithUsername(ctx context.Context, username string) (user *User, err error)
+}
+
 type DataBaseAccessObject struct {
 	conn dbConn
 }
@@ -55,10 +75,6 @@ func New(config utils.Config, context context.Context) *DataBaseAccessObject {
 func NewWithMockConn(conn dbConn) *DataBaseAccessObject {
 	return &DataBaseAccessObject{conn: conn}
 }
-
-/*
-	DB operations
-*/
 
 func (dao *DataBaseAccessObject) CreateArtist(ctx context.Context, name string) (artist *Artist, err error) {
 	artist = &Artist{Name: name}
@@ -99,7 +115,7 @@ func (dao *DataBaseAccessObject) GetTracks(ctx context.Context, limit int32, off
 	return GetTracks(ctx, limit, offset)
 }
 
-func CreateUser(ctx context.Context, username, passwordHash string) (err error) {
+func (dao *DataBaseAccessObject) CreateUser(ctx context.Context, username, passwordHash string) (err error) {
 	user := &User{Username: username, PasswordHash: passwordHash}
 	if err := validator.Validate(user); err != nil {
 		return err
@@ -107,10 +123,10 @@ func CreateUser(ctx context.Context, username, passwordHash string) (err error) 
 	return user.Commit(ctx)
 }
 
-func GetUser(ctx context.Context, id string) (user *User, err error) {
+func (dao *DataBaseAccessObject) GetUserWithId(ctx context.Context, id string) (user *User, err error) {
 	return GetUserById(ctx, id)
 }
 
-func GetUserByUsername(ctx context.Context, username string) (user *User, err error) {
+func (dao *DataBaseAccessObject) GetUserWithUsername(ctx context.Context, username string) (user *User, err error) {
 	return GetUserByUsername(ctx, username)
 }

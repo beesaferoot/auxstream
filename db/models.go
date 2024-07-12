@@ -172,7 +172,7 @@ func GetUserById(ctx context.Context, id string) (user *User, err error) {
 	return
 }
 
-func GetUserByUser(ctx context.Context, username string) (user *User, err error) {
+func GetUserByUsername(ctx context.Context, username string) (user *User, err error) {
 	user = &User{}
 	stmt := `SELECT id, username, password_hash, created_at
  			 FROM auxstream.users
