@@ -7,6 +7,9 @@ import (
 type Config struct {
 	DBUrl         string `mapstructure:"DATABASE_URL"`
 	SessionString string `mapstructure:"SESSION_STRING"`
+	GinMode       string `mapstructure:"GIN_MODE"`
+	Addr          string `mapstructure:"ADDR"`
+	Port          string `mapstructure:"PORT"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
