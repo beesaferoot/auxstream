@@ -135,7 +135,7 @@ func TestHTTPTrackUploadBatch(t *testing.T) {
 	formData := url.Values{}
 	formData.Add("artist_id", strconv.Itoa(artistId))
 	for i := 0; i < testRecordCnt; i++ {
-		formData.Add("track_title", fmt.Sprintf("#%d", i))
+		formData.Add("track_titles", fmt.Sprintf("#%d", i))
 	}
 
 	post, err := req.Post(tserver.URL+"/upload_batch_track", formData, trackFiles)
@@ -155,7 +155,7 @@ func TestHTTPFetchTracks(t *testing.T) {
 	mockConn.ExpectQuery(`
 	SELECT id, title, artist_id, file, created_at
 	`).
-		WithArgs(int32(2), int32(0)).
+		WithArgs(int8(2), int8(0)).
 		WillReturnRows(pgxmock.NewRows(columns).
 			AddRow(1, "Title", 1, "Test file", time.Now()).
 			AddRow(1, "Title", 1, "Test file", time.Now()).

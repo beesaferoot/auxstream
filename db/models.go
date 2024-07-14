@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"github.com/jackc/pgx/v5"
 	"time"
 )
@@ -61,7 +62,8 @@ func (artist *Artist) Commit(ctx context.Context) (err error) {
 	return
 }
 
-func GetTracks(ctx context.Context, limit int32, offset int32) (tracks []*Track, err error) {
+func GetTracks(ctx context.Context, limit int8, offset int8) (tracks []*Track, err error) {
+	fmt.Printf("GetTracks: limit: %d, offset: %d\n", limit, offset)
 	tracks = []*Track{}
 	stmt := `SELECT id, title, artist_id, file, created_at 
 			 FROM auxstream.tracks 

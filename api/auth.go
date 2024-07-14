@@ -4,7 +4,6 @@ import (
 	"auxstream/db"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -27,17 +26,26 @@ func CookieAuthMiddleware(c *gin.Context) {
 	c.Next()
 }
 
-func Signup(c *gin.Context) {
-	username := c.PostForm("username")
-	password := c.PostForm("password")
+type AuthForm struct {
+	Username string `form:"username" binding:"required"`
+	Password string `form:"password" binding:"required"`
+}
 
-	pHash, err := hashPassword(password)
+func Signup(c *gin.Context) {
+	var form AuthForm
+
+	if err := c.ShouldBind(&form); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	pHash, err := hashPassword(form.Password)
 	if err != nil {
 		fmt.Println("password hash failure: ", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
 		return
 	}
-	err = db.DAO.CreateUser(c, username, pHash)
+	err = db.DAO.CreateUser(c, form.Username, pHash)
 	if err != nil {
 		fmt.Println("CreateUser: ", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
@@ -49,22 +57,21 @@ func Signup(c *gin.Context) {
 
 func Login(c *gin.Context) {
 	session := sessions.Default(c)
-	username := c.PostForm("username")
-	password := c.PostForm("password")
 
-	// Validate form input
-	if strings.Trim(username, "") == " " || strings.Trim(password, " ") == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "parameters can't be empty"})
+	var form AuthForm
+
+	if err := c.ShouldBind(&form); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := db.DAO.GetUserWithUsername(c, username)
+	user, err := db.DAO.GetUserWithUsername(c, form.Username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
 		return
 	}
 
-	if !cmpHashString(user.PasswordHash, password) {
+	if !cmpHashString(user.PasswordHash, form.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 		return
 	}

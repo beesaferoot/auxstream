@@ -111,7 +111,7 @@ func (dao *DataBaseAccessObject) SearchTrackByArtist(ctx context.Context,
 	return GetTrackByArtist(ctx, artist)
 }
 
-func (dao *DataBaseAccessObject) GetTracks(ctx context.Context, limit int32, offset int32) (tracks []*Track, err error) {
+func (dao *DataBaseAccessObject) GetTracks(ctx context.Context, limit int8, offset int8) (tracks []*Track, err error) {
 	return GetTracks(ctx, limit, offset)
 }
 

@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"mime/multipart"
 	"net/http"
-	"strconv"
 )
 
 // FetchTracksByArtistHandler fetch tracks by artist (limit results < 100)
@@ -25,15 +24,25 @@ func FetchTracksByArtistHandler(c *gin.Context) {
 
 }
 
+type FetchTrackQueryParams struct {
+	PageSize int8 `form:"pagesize" binding:"gte=0"`
+	PageNum  int8 `form:"pagenumber" binding:"gte=1"`
+}
+
 // FetchTracksHandler fetch paginated tracks with limit on page size
 func FetchTracksHandler(c *gin.Context) {
-	pagesize := c.Query("pagesize")
-	pagenumber := c.Query("pagenumber")
+	var reqParams FetchTrackQueryParams
 
-	limit, _ := strconv.Atoi(pagesize)
-	offset, _ := strconv.Atoi(pagenumber)
+	fmt.Printf("pagesize: %s\npagenum: %s\n ", c.Query("pagesize"), c.Query("pagenumber"))
+	if err := c.ShouldBindQuery(&reqParams); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
+		return
+	}
 
-	tracks, err := db.DAO.GetTracks(c, int32(limit), int32((offset-1)*limit))
+	limit := reqParams.PageSize
+	offset := (reqParams.PageNum - 1) * reqParams.PageSize
+
+	tracks, err := db.DAO.GetTracks(c, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
 		return
@@ -45,16 +54,24 @@ func FetchTracksHandler(c *gin.Context) {
 
 }
 
+type AddTrackForm struct {
+	Title    string                `form:"title" binding:"required"`
+	ArtistId int                   `form:"artist_id" binding:"required"`
+	Audio    *multipart.FileHeader `form:"audio" binding:"required"`
+}
+
 // AddTrackHandler add track to the system
 func AddTrackHandler(c *gin.Context) {
-	form, _ := c.MultipartForm()
-	trackTittle := form.Value["title"][0]
-	trackArtistId, err := strconv.Atoi(form.Value["artist_id"][0])
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("artistId should be a valid number"))
+	var reqForm AddTrackForm
+	if err := c.ShouldBind(&reqForm); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 		return
 	}
-	file := form.File["audio"][0]
+
+	trackTittle := reqForm.Title
+	trackArtistId := reqForm.ArtistId
+	file := reqForm.Audio
+
 	if file.Size <= 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("audio for track not found"))
 		return
@@ -81,18 +98,22 @@ func AddTrackHandler(c *gin.Context) {
 	})
 }
 
+type BulkTrackUploadForm struct {
+	Titles   []string                `form:"track_titles" binding:"required"`
+	Files    []*multipart.FileHeader `form:"track_files" binding:"required"`
+	ArtistId int                     `form:"artist_id" binding:"required"`
+}
+
 // BulkTrackUploadHandler enables bulk track uploads
 func BulkTrackUploadHandler(c *gin.Context) {
-	form, _ := c.MultipartForm()
-	titles := form.Value["track_title"]
-	files := form.File["track_files"]
-	artistId, err := strconv.Atoi(form.Value["artist_id"][0])
+	var reqForm BulkTrackUploadForm
 
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse(fmt.Sprintf("invalid artist_id value: %s", err.Error())))
+	if err := c.ShouldBind(&reqForm); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
+		return
 	}
 
-	fileNames, err := processFiles(files)
+	fileNames, err := processFiles(reqForm.Files)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
@@ -104,11 +125,11 @@ func BulkTrackUploadHandler(c *gin.Context) {
 	// filter tracks that failed to upload
 	for idx, fileName := range fileNames {
 		if fileName != "" {
-			trackTitles = append(trackTitles, titles[idx])
+			trackTitles = append(trackTitles, reqForm.Titles[idx])
 			filteredFileNames = append(filteredFileNames, fileName)
 		}
 	}
-	rows, err := db.DAO.BulkCreateTracks(c, trackTitles, artistId, filteredFileNames)
+	rows, err := db.DAO.BulkCreateTracks(c, trackTitles, reqForm.ArtistId, filteredFileNames)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
