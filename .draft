@@ -1,8 +1,16 @@
 Design Questions? 
-[-] How to store audio files on the database? 
+[+] How to store audio files on the database?
  1. use a BLOB data type to store files.
  2. store the file path of the audio file.
 
-[X] 2. Because it would be easier to work with, given the need to handle file streaming and download. 
-  Also, places a good opportunity for optimization. 
- 
+    [X] 2. Because it would be easier to work with, given the need to handle file streaming and download.
+      Also, places a good opportunity for optimization.
+
+
+[+] Restrict audio places to .mp3 (backend/client)
+    This decision is made to ensure we can control the quality of audio files upload,
+    accepting only .mp3 makes it convenient to do so.
+
+[+] Restrict max audio file size.
+    Ensure the server doesn't get DDOS' by accepting extremely large audio file.
+    

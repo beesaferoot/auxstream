@@ -6,8 +6,12 @@ Backend check list
 [+] add some auth protection on /upload_batch_track endpoint
 [-] serve audio files (stream from client)
 [-] support downloading
+[-] setup upload to cloudinary.
+[-] limit audio upload size (5mb max)
 
 UI check list 
 [+] search interface
 [+] audio pane display
 [-] audio player interface 
+[-] auth pages (sign/signup)
+[+] audio upload dashboard (admin)
