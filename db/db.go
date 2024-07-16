@@ -36,6 +36,9 @@ type DBAccess interface {
 	SearchTrackByTittle(ctx context.Context, title string) (tracks []*Track, err error)
 	GetTracks(ctx context.Context, limit int32, offset int32) (tracks []*Track, err error)
 
+	// artist
+	GetArtistById(ctx context.Context, id int) (artist *Artist, err error)
+
 	// user
 	CreateUser(ctx context.Context, username, passwordHash string) (err error)
 	GetUserWithId(ctx context.Context, id string) (user *User, err error)
@@ -129,4 +132,8 @@ func (dao *DataBaseAccessObject) GetUserWithId(ctx context.Context, id string) (
 
 func (dao *DataBaseAccessObject) GetUserWithUsername(ctx context.Context, username string) (user *User, err error) {
 	return GetUserByUsername(ctx, username)
+}
+
+func (dao *DataBaseAccessObject) GetArtistById(ctx context.Context, id int) (artist *Artist, err error) {
+	return GetArtistById(ctx, id)
 }

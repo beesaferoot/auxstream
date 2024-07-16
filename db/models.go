@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"github.com/jackc/pgx/v5"
 	"time"
 )
@@ -38,6 +38,14 @@ func (user *User) Commit(ctx context.Context) (err error) {
 	return
 }
 
+func (user *User) MarshalBinary() ([]byte, error) {
+	return json.Marshal(user)
+}
+
+func (user *User) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, user)
+}
+
 func (track *Track) Commit(ctx context.Context) (err error) {
 	stmt := `INSERT INTO auxstream.tracks (title, artist_id, file) 
              VALUES ($1, $2, $3) 
@@ -47,6 +55,14 @@ func (track *Track) Commit(ctx context.Context) (err error) {
 
 	err = row.Scan(&track.Id, &track.CreatedAt)
 	return
+}
+
+func (track *Track) MarshalBinary() ([]byte, error) {
+	return json.Marshal(track)
+}
+
+func (track *Track) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, track)
 }
 
 func (artist *Artist) Commit(ctx context.Context) (err error) {
@@ -62,8 +78,15 @@ func (artist *Artist) Commit(ctx context.Context) (err error) {
 	return
 }
 
+func (artist *Artist) MarshalBinary() ([]byte, error) {
+	return json.Marshal(artist)
+}
+
+func (artist *Artist) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, artist)
+}
+
 func GetTracks(ctx context.Context, limit int8, offset int8) (tracks []*Track, err error) {
-	fmt.Printf("GetTracks: limit: %d, offset: %d\n", limit, offset)
 	tracks = []*Track{}
 	stmt := `SELECT id, title, artist_id, file, created_at 
 			 FROM auxstream.tracks 
@@ -182,6 +205,18 @@ func GetUserByUsername(ctx context.Context, username string) (user *User, err er
 	row := DAO.conn.QueryRow(ctx, stmt, username)
 
 	err = row.Scan(&user.Id, &user.Username, &user.PasswordHash, &user.CreatedAt)
+
+	return
+}
+
+func GetArtistById(ctx context.Context, id int) (artist *Artist, err error) {
+	artist = &Artist{Id: id}
+	stmt := `SELECT name, created_at
+			 FROM auxstream.artists
+			 WHERE id = $1`
+	row := DAO.conn.QueryRow(ctx, stmt, id)
+
+	err = row.Scan(&artist.Name, &artist.CreatedAt)
 
 	return
 }

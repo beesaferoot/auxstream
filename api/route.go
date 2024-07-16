@@ -1,14 +1,24 @@
 package api
 
 import (
+	"auxstream/cache"
 	"auxstream/utils"
+	"context"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRouter(envConfig utils.Config) *gin.Engine {
+func injectCache(cache cache.Cache) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := context.WithValue(c.Request.Context(), "cacheClient", cache)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
+func SetupRouter(envConfig utils.Config, cache cache.Cache) *gin.Engine {
 	r := gin.Default()
 
 	sessionSecret := []byte(envConfig.SessionString)
@@ -21,6 +31,7 @@ func SetupRouter(envConfig utils.Config) *gin.Engine {
 		AllowCredentials: true,
 	})
 	r.Use(config)
+	r.Use(injectCache(cache))
 	v1 := r.Group("/api/v1")
 
 	// Set up the cookie store for session management

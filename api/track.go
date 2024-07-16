@@ -1,12 +1,14 @@
 package api
 
 import (
+	"auxstream/cache"
 	"auxstream/db"
 	fs "auxstream/file_system"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"mime/multipart"
 	"net/http"
+	"time"
 )
 
 // FetchTracksByArtistHandler fetch tracks by artist (limit results < 100)
@@ -88,6 +90,32 @@ func AddTrackHandler(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(store) audio upload failed: %s", err.Error())))
 		return
 	}
+
+	artist := &db.Artist{Id: trackArtistId}
+
+	ctx := c.Request.Context()
+	cacheClient, ok := ctx.Value("cacheClient").(cache.Cache)
+
+	artistCacheKey := "artist-id-" + fmt.Sprintf("%d", trackArtistId)
+	// cache client exists
+	if ok {
+		err = cacheClient.Get(artistCacheKey, artist)
+		if err != nil {
+			fmt.Printf("(Get artist id from cache) failed: %s\n", err.Error())
+			err = nil
+		}
+	}
+
+	// artist should point to a value from cache if cache hit was successful
+	if artist.Name == "" {
+		artist, err = db.DAO.GetArtistById(c, trackArtistId)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusNotFound, errorResponse(fmt.Sprintf("artist with id (%d) does not exists: %s", trackArtistId, err.Error())))
+			return
+		}
+		_ = cacheClient.Set(artistCacheKey, artist, 10*time.Hour)
+	}
+
 	track, err := db.DAO.CreateTrack(c, trackTittle, trackArtistId, fileName)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(db) audio upload failed: %s", err.Error())))
