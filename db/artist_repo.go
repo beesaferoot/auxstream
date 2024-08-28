@@ -47,7 +47,7 @@ func (r *artistRepo) GetArtistById(ctx context.Context, id int) (*Artist, error)
 			 WHERE id = $1`
 	row := r.Db.QueryRow(ctx, stmt, id)
 
-	err := row.Scan(&artist.Name, artist.CreatedAt)
+	err := row.Scan(&artist.Name, &artist.CreatedAt)
 
 	return artist, err
 }

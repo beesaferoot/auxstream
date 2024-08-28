@@ -14,6 +14,7 @@ import (
 
 type Server interface {
 	Run() error
+	SetupRouter(mock bool) *gin.Engine
 }
 
 type ServerConfig struct {
@@ -36,8 +37,15 @@ func NewServer(serverConfig ServerConfig) Server {
 	}
 }
 
+func NewMockServer(db db.DbConn, cache cache.Cache) Server {
+	return &server{
+		db:    db,
+		cache: cache,
+	}
+}
+
 func (s *server) Run() error {
-	router := s.setupRouter()
+	router := s.SetupRouter(false)
 
 	err := router.SetTrustedProxies([]string{"127.0.0.1"})
 	if err != nil {
@@ -45,6 +53,13 @@ func (s *server) Run() error {
 	}
 
 	return router.Run(s.conf.Addr + ":" + s.conf.Port)
+}
+
+func (s *server) SetupRouter(mock bool) *gin.Engine {
+	if mock {
+		return s.setupMockRouter()
+	}
+	return s.setupRouter()
 }
 
 func (s *server) setupRouter() *gin.Engine {
@@ -91,6 +106,25 @@ func (s *server) setupRouter() *gin.Engine {
 		Logout(c)
 	})
 	v1.Static("/serve", "./uploads")
+
+	return r
+}
+
+func (s *server) setupMockRouter() *gin.Engine {
+	r := gin.Default()
+	r.Use(injectCache(s.cache))
+	r.POST("/upload_track", func(c *gin.Context) {
+		AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
+	})
+	r.POST("/upload_batch_track", func(c *gin.Context) {
+		BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
+	})
+	r.GET("/tracks", func(c *gin.Context) {
+		FetchTracksHandler(c, db.NewTrackRepo(s.db))
+	})
+	r.GET("/search", func(c *gin.Context) {
+		FetchTracksByArtistHandler(c, db.NewTrackRepo(s.db))
+	})
 
 	return r
 }

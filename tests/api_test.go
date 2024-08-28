@@ -2,14 +2,10 @@ package tests
 
 import (
 	"auxstream/api"
-	"auxstream/db"
+	"auxstream/cache"
 	fs "auxstream/file_system"
 	"context"
 	"fmt"
-	"github.com/imroc/req"
-	"github.com/jackc/pgx/v5"
-	"github.com/pashagolub/pgxmock/v2"
-	"github.com/stretchr/testify/require"
 	"log"
 	"net/http/httptest"
 	"net/url"
@@ -18,12 +14,20 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/gin-gonic/gin"
+	"github.com/imroc/req"
+	"github.com/jackc/pgx/v5"
+	"github.com/pashagolub/pgxmock/v2"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 )
 
 var cwd, _ = os.Getwd()
 var testDataPath = filepath.Join(cwd, "testdata")
 var mockConn pgxmock.PgxConnIface
-var router = api.SetupTestRouter()
+var router *gin.Engine
 
 func setupTest(_ *testing.T) func(t *testing.T) {
 	var err error
@@ -31,7 +35,14 @@ func setupTest(_ *testing.T) func(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Failed to set up mock database connection: %v", err)
 	}
-	db.DAO = db.NewWithMockConn(mockConn)
+
+	mr, _ := miniredis.Run()
+	opts := &redis.Options{
+		Addr: mr.Addr(),
+	}
+	r := cache.NewRedis(opts)
+	server := api.NewMockServer(mockConn, r)
+	router = server.SetupRouter(true)
 
 	return tearDownTest
 }
@@ -45,6 +56,11 @@ func TestHTTPAddTrack(t *testing.T) {
 	defer teardown(t)
 
 	columns := []string{"id", "created_at"}
+	mockConn.ExpectQuery("SELECT name, created_at FROM auxstream.artists").
+		WithArgs(1).
+		WillReturnRows(pgxmock.NewRows([]string{"name", "created_at"}).
+		AddRow("Hike", time.Now()))
+
 	mockConn.ExpectQuery("INSERT INTO auxstream.tracks").
 		WithArgs("Sample Title", 1, pgxmock.AnyArg()).
 		WillReturnRows(pgxmock.NewRows(columns).AddRow(1, time.Now()))
@@ -72,12 +88,12 @@ func TestHTTPAddTrack(t *testing.T) {
 		File:      file,
 		FileName:  "audio",
 	})
-	require.Equal(t, post.Response().StatusCode, 200)
+	require.Equal(t, 200, post.Response().StatusCode)
 	require.Equal(t, fs.LStore.Writes(), 1)
 	data := &map[string]interface{}{}
 	err = post.ToJSON(data)
 	require.NoError(t, err)
-	//fmt.Println("response body: ", data)
+	// fmt.Println("response body: ", data)
 }
 
 func TestHTTPSearchByArtist(t *testing.T) {
@@ -166,7 +182,7 @@ func TestHTTPFetchTracks(t *testing.T) {
 	resp, err := req.Get(tserver.URL + "/tracks?pagesize=2&pagenumber=1")
 
 	require.NoError(t, err)
-	require.Equal(t, resp.Response().StatusCode, 200)
+	require.Equal(t, 200, resp.Response().StatusCode)
 	data := &map[string]interface{}{}
 	err = resp.ToJSON(data)
 	require.NoError(t, err)
