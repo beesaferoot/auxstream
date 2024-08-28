@@ -1,9 +1,7 @@
 package db
 
 import (
-	"context"
 	"encoding/json"
-	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -28,33 +26,12 @@ type Artist struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (user *User) Commit(ctx context.Context) (err error) {
-	stmt := `INSERT INTO auxstream.users (username, password_hash)
-			 VALUES ($1, $2) 
-			 RETURNING id, created_at
-			 `
-	row := DAO.conn.QueryRow(ctx, stmt, user.Username, user.PasswordHash)
-	err = row.Scan(&user.Id, &user.CreatedAt)
-	return
-}
-
 func (user *User) MarshalBinary() ([]byte, error) {
 	return json.Marshal(user)
 }
 
 func (user *User) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, user)
-}
-
-func (track *Track) Commit(ctx context.Context) (err error) {
-	stmt := `INSERT INTO auxstream.tracks (title, artist_id, file) 
-             VALUES ($1, $2, $3) 
-             RETURNING id, created_at
-             `
-	row := DAO.conn.QueryRow(ctx, stmt, track.Title, track.ArtistId, track.File)
-
-	err = row.Scan(&track.Id, &track.CreatedAt)
-	return
 }
 
 func (track *Track) MarshalBinary() ([]byte, error) {
@@ -65,19 +42,6 @@ func (track *Track) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, track)
 }
 
-func (artist *Artist) Commit(ctx context.Context) (err error) {
-	// This query ensures we don't create a new artist record if we already have one
-	stmt := `
-    INSERT INTO auxstream.artists (name) VALUES ($1)
-    ON CONFLICT (name) DO NOTHING
-	RETURNING id, created_at
-	`
-	row := DAO.conn.QueryRow(ctx, stmt, artist.Name)
-
-	err = row.Scan(&artist.Id, &artist.CreatedAt)
-	return
-}
-
 func (artist *Artist) MarshalBinary() ([]byte, error) {
 	return json.Marshal(artist)
 }
@@ -86,137 +50,4 @@ func (artist *Artist) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, artist)
 }
 
-func GetTracks(ctx context.Context, limit int8, offset int8) (tracks []*Track, err error) {
-	tracks = []*Track{}
-	stmt := `SELECT id, title, artist_id, file, created_at 
-			 FROM auxstream.tracks 
-			 LIMIT $1 
-			 OFFSET $2
-			 `
-	rows, err := DAO.conn.Query(ctx, stmt, limit, offset)
-	if err != nil {
-		return nil, err
-	}
 
-	defer rows.Close()
-
-	for rows.Next() {
-		track := &Track{}
-		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.File, &track.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-	err = rows.Err()
-	if err != nil {
-		return nil, err
-	}
-	return tracks, nil
-}
-
-func GetTrackByTitle(ctx context.Context, title string) (tracks []*Track, err error) {
-	tracks = []*Track{}
-	stmt := `SELECT id, title, artist_id, file, created_at 
-			 FROM auxstream.tracks 
-			 WHERE title = $1
-			 `
-	rows, err := DAO.conn.Query(ctx, stmt, title)
-	if err != nil {
-		return nil, err
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		track := &Track{}
-		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.File, &track.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-	err = rows.Err()
-	if err != nil {
-		return nil, err
-	}
-	return tracks, nil
-}
-
-func GetTrackByArtist(ctx context.Context, artist string) (tracks []*Track, err error) {
-	tracks = []*Track{}
-	stmt := `SELECT t.id, t.title, t.artist_id, t.file, t.created_at
-	FROM auxstream.tracks AS t
-	JOIN auxstream.artists AS a ON t.artist_id = a.id
-	WHERE a.name = $1
-	`
-	rows, err := DAO.conn.Query(ctx, stmt, artist)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		track := &Track{}
-		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.File, &track.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-	err = rows.Err()
-	if err != nil {
-		return nil, err
-	}
-	return tracks, nil
-}
-
-func BulkCreateTrack(ctx context.Context, trackTitles []string, artistId int, fileNames []string) (count int64, err error) {
-	var rows [][]interface{}
-
-	for idx, title := range trackTitles {
-		rows = append(rows, []interface{}{title, artistId, fileNames[idx]})
-	}
-	count, err = DAO.conn.CopyFrom(
-		ctx,
-		pgx.Identifier{"auxstream", "tracks"},
-		[]string{"title", "artist_id", "file"},
-		pgx.CopyFromRows(rows),
-	)
-	return count, err
-}
-
-func GetUserById(ctx context.Context, id string) (user *User, err error) {
-	stmt := `SELECT id, username, password_hash, created_at
- 			 FROM auxstream.users
- 			 WHERE id = $1`
-	row := DAO.conn.QueryRow(ctx, stmt, id)
-
-	err = row.Scan(&user.Id, &user.Username, &user.PasswordHash, &user.CreatedAt)
-
-	return
-}
-
-func GetUserByUsername(ctx context.Context, username string) (user *User, err error) {
-	user = &User{}
-	stmt := `SELECT id, username, password_hash, created_at
- 			 FROM auxstream.users
- 			 WHERE username = $1`
-	row := DAO.conn.QueryRow(ctx, stmt, username)
-
-	err = row.Scan(&user.Id, &user.Username, &user.PasswordHash, &user.CreatedAt)
-
-	return
-}
-
-func GetArtistById(ctx context.Context, id int) (artist *Artist, err error) {
-	artist = &Artist{Id: id}
-	stmt := `SELECT name, created_at
-			 FROM auxstream.artists
-			 WHERE id = $1`
-	row := DAO.conn.QueryRow(ctx, stmt, id)
-
-	err = row.Scan(&artist.Name, &artist.CreatedAt)
-
-	return
-}

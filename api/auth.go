@@ -2,7 +2,7 @@ package api
 
 import (
 	"auxstream/db"
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-contrib/sessions"
@@ -31,7 +31,7 @@ type AuthForm struct {
 	Password string `form:"password" binding:"required"`
 }
 
-func Signup(c *gin.Context) {
+func Signup(c *gin.Context, r db.UserRepo) {
 	var form AuthForm
 
 	if err := c.ShouldBind(&form); err != nil {
@@ -41,13 +41,13 @@ func Signup(c *gin.Context) {
 
 	pHash, err := hashPassword(form.Password)
 	if err != nil {
-		fmt.Println("password hash failure: ", err.Error())
+		log.Println("password hash failure: ", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
 		return
 	}
-	err = db.DAO.CreateUser(c, form.Username, pHash)
+	_, err = r.CreateUser(c, form.Username, pHash)
 	if err != nil {
-		fmt.Println("CreateUser: ", err.Error())
+		log.Println("CreateUser: ", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
 		return
 	}
@@ -55,7 +55,7 @@ func Signup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "successfully signed up user"})
 }
 
-func Login(c *gin.Context) {
+func Login(c *gin.Context, r db.UserRepo) {
 	session := sessions.Default(c)
 
 	var form AuthForm
@@ -65,7 +65,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	user, err := db.DAO.GetUserWithUsername(c, form.Username)
+	user, err := r.GetUserByUsername(c, form.Username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
 		return
@@ -103,7 +103,7 @@ func hashPassword(password string) (hash string, err error) {
 	// Generate a bcrypt hash of the password
 	hashByte, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		fmt.Println("Error generating hash:", err)
+		log.Println("Error generating hash:", err)
 		return "", err
 	}
 	hash = string(hashByte)

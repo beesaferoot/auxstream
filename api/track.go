@@ -5,16 +5,18 @@ import (
 	"auxstream/db"
 	fs "auxstream/file_system"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 // FetchTracksByArtistHandler fetch tracks by artist (limit results < 100)
-func FetchTracksByArtistHandler(c *gin.Context) {
+func FetchTracksByArtistHandler(c *gin.Context, r db.TrackRepo) {
 	artist := c.Query("artist")
-	tracks, err := db.DAO.SearchTrackByArtist(c, artist)
+	tracks, err := r.GetTrackByArtist(c, artist)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
 		return
@@ -32,10 +34,9 @@ type FetchTrackQueryParams struct {
 }
 
 // FetchTracksHandler fetch paginated tracks with limit on page size
-func FetchTracksHandler(c *gin.Context) {
+func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 	var reqParams FetchTrackQueryParams
 
-	fmt.Printf("pagesize: %s\npagenum: %s\n ", c.Query("pagesize"), c.Query("pagenumber"))
 	if err := c.ShouldBindQuery(&reqParams); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 		return
@@ -44,7 +45,7 @@ func FetchTracksHandler(c *gin.Context) {
 	limit := reqParams.PageSize
 	offset := (reqParams.PageNum - 1) * reqParams.PageSize
 
-	tracks, err := db.DAO.GetTracks(c, limit, offset)
+	tracks, err := r.GetTracks(c, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
 		return
@@ -63,7 +64,7 @@ type AddTrackForm struct {
 }
 
 // AddTrackHandler add track to the system
-func AddTrackHandler(c *gin.Context) {
+func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 	var reqForm AddTrackForm
 	if err := c.ShouldBind(&reqForm); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
@@ -101,14 +102,14 @@ func AddTrackHandler(c *gin.Context) {
 	if ok {
 		err = cacheClient.Get(artistCacheKey, artist)
 		if err != nil {
-			fmt.Printf("(Get artist id from cache) failed: %s\n", err.Error())
+			log.Printf("(Get artist id from cache) failed: %s\n", err.Error())
 			err = nil
 		}
 	}
 
 	// artist should point to a value from cache if cache hit was successful
 	if artist.Name == "" {
-		artist, err = db.DAO.GetArtistById(c, trackArtistId)
+		artist, err = artistRepo.GetArtistById(c, trackArtistId)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, errorResponse(fmt.Sprintf("artist with id (%d) does not exists: %s", trackArtistId, err.Error())))
 			return
@@ -116,7 +117,7 @@ func AddTrackHandler(c *gin.Context) {
 		_ = cacheClient.Set(artistCacheKey, artist, 10*time.Hour)
 	}
 
-	track, err := db.DAO.CreateTrack(c, trackTittle, trackArtistId, fileName)
+	track, err := r.CreateTrack(c, trackTittle, trackArtistId, fileName)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(db) audio upload failed: %s", err.Error())))
 		return
@@ -133,7 +134,7 @@ type BulkTrackUploadForm struct {
 }
 
 // BulkTrackUploadHandler enables bulk track uploads
-func BulkTrackUploadHandler(c *gin.Context) {
+func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 	var reqForm BulkTrackUploadForm
 
 	if err := c.ShouldBind(&reqForm); err != nil {
@@ -157,7 +158,7 @@ func BulkTrackUploadHandler(c *gin.Context) {
 			filteredFileNames = append(filteredFileNames, fileName)
 		}
 	}
-	rows, err := db.DAO.BulkCreateTracks(c, trackTitles, reqForm.ArtistId, filteredFileNames)
+	rows, err := r.BulkCreateTracks(c, trackTitles, reqForm.ArtistId, filteredFileNames)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))

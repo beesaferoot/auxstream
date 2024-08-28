@@ -6,9 +6,10 @@ import (
 	"auxstream/db"
 	"auxstream/utils"
 	"context"
+	"log"
+
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"log"
 )
 
 func main() {
@@ -16,20 +17,20 @@ func main() {
 	if err != nil {
 		log.Fatal("could not load env config: ", err.Error())
 	}
-	db.DAO = db.New(config, context.Background())
+	dB := db.InitDB(config, context.Background())
 	gin.SetMode(config.GinMode)
 
 	rc := cache.NewRedis(&redis.Options{
 		Addr: config.RedisAddr,
 	})
-	router := api.SetupRouter(config, rc)
 
-	router.ForwardedByClientIP = true
-	err = router.SetTrustedProxies([]string{"127.0.0.1"})
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	err = router.Run(config.Addr + ":" + config.Port)
+	server := api.NewServer(api.ServerConfig{
+		Cache: rc,
+		DB:    dB,
+		Conf:  config,
+	})
+
+	err = server.Run()
 	if err != nil {
 		log.Fatalln("failed to start server")
 	}
