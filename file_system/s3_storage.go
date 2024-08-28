@@ -35,7 +35,7 @@ func (s3 *S3Store) Writes() int {
 
 func (s3 *S3Store) Save(raw []byte) (filename string, err error) {
 	if len(raw) < 1 {
-		return filename, fmt.Errorf("empty file")
+		return "", fmt.Errorf("empty file")
 	}
 	filename = genFileName()
 
@@ -45,7 +45,7 @@ func (s3 *S3Store) Save(raw []byte) (filename string, err error) {
 	uploader := s3manager.NewUploader(s3.session)
 
 	// Upload the file to S3.
-	_, err = uploader.Upload(&s3manager.UploadInput{
+	result, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(s3.bucketId),
 		Key:    aws.String(filename),
 		Body:   freader,
@@ -54,26 +54,29 @@ func (s3 *S3Store) Save(raw []byte) (filename string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file, %v", err)
 	}
+
+	filename = result.Location
+
 	s3.mu.Lock()
 	s3.uploads++
 	s3.mu.Unlock()
 	return
 }
 
-func (s3 *S3Store) Read(fileName string) (file File, err error) {
+func (s3 *S3Store) Read(location string) (file File, err error) {
 	// Create a downloader with the session=
 	downloader := s3manager.NewDownloader(s3.session)
 	// Create a file to write the S3 Object contents to.
-	lfile, err := NewFile(fileName)
+	lfile, err := NewFile(location)
 	file = lfile
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create file %q, %v", fileName, err)
+		return nil, fmt.Errorf("failed to create file %q, %v", location, err)
 	}
 
 	_, err = downloader.Download(lfile, &s3API.GetObjectInput{
 		Bucket: aws.String(s3.bucketId),
-		Key:    aws.String(fileName),
+		Key:    aws.String(location),
 	})
 
 	if err != nil {
