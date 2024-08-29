@@ -66,7 +66,7 @@ func TestHTTPAddTrack(t *testing.T) {
 		WillReturnRows(pgxmock.NewRows(columns).AddRow(1, time.Now()))
 	mockConn.ExpectCommit()
 	// mock real store with test store
-	fs.LStore = fs.NewLocalStore(os.TempDir())
+	fs.Store = fs.NewLocalStore(os.TempDir())
 	tserver := httptest.NewServer(router)
 	defer tserver.Close()
 
@@ -86,10 +86,10 @@ func TestHTTPAddTrack(t *testing.T) {
 	post, err := req.Post(tserver.URL+"/upload_track", body, req.FileUpload{
 		FieldName: "audio",
 		File:      file,
-		FileName:  "audio",
+		FileName:  "audio.mp3",
 	})
 	require.Equal(t, 200, post.Response().StatusCode)
-	require.Equal(t, fs.LStore.Writes(), 1)
+	require.Equal(t, fs.Store.Writes(), 1)
 	data := &map[string]interface{}{}
 	err = post.ToJSON(data)
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestHTTPTrackUploadBatch(t *testing.T) {
 	testRecordCnt := 30
 	mockConn.ExpectCopyFrom(pgx.Identifier{"auxstream", "tracks"}, []string{"title", "artist_id", "file"}).
 		WillReturnResult(int64(testRecordCnt))
-	fs.LStore = fs.NewLocalStore(os.TempDir())
+	fs.Store = fs.NewLocalStore(os.TempDir())
 	var err error
 	var trackFiles []req.FileUpload
 

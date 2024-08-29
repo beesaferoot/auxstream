@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"auxstream/utils"
 	"io"
 )
 
@@ -19,4 +20,19 @@ type File interface {
 	Name() string
 	Size() int64
 	io.ReadWriter
+}
+
+func SetFileStore(config utils.Config) error {
+
+	if config.FileStore == "s3" && config.S3bucket != "" {
+		Store = NewS3Store(config.S3bucket)
+	} else if config.FileStore == "cloudinary" && config.CloudinaryURL != "" {
+		st, err := NewCloudinaryStore(config.CloudinaryURL)
+		if err != nil {
+			return err
+		}
+		Store = st
+	}
+
+	return nil
 }

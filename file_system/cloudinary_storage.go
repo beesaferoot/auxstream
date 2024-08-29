@@ -5,6 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/cloudinary/cloudinary-go/v2"
@@ -21,10 +26,10 @@ type CloudinaryStore struct {
 	downloads          int
 }
 
-func NewCloudinaryStore() (*CloudinaryStore, error) {
+func NewCloudinaryStore(url string) (*CloudinaryStore, error) {
 	// Start by creating a new instance of Cloudinary using CLOUDINARY_URL environment variable.
 	// Alternatively you can use cloudinary.NewFromParams() or cloudinary.NewFromURL().
-	cld, err := cloudinary.New()
+	cld, err := cloudinary.NewFromURL(url)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +47,7 @@ func (cld *CloudinaryStore) Writes() int {
 }
 
 func (cld *CloudinaryStore) Save(raw []byte) (filename string, err error) {
-	if len(raw) > 0 {
+	if len(raw) < 1 {
 		return "", errors.New("empty file")
 	}
 
@@ -54,7 +59,7 @@ func (cld *CloudinaryStore) Save(raw []byte) (filename string, err error) {
 		context.Background(),
 		freader,
 		uploader.UploadParams{
-			PublicID:       filename,
+			PublicID:       strings.TrimSuffix(filename, ".mp3"),
 			UniqueFilename: api.Bool(false),
 			Overwrite:      api.Bool(true),
 		},
@@ -70,26 +75,49 @@ func (cld *CloudinaryStore) Save(raw []byte) (filename string, err error) {
 	return filename, nil
 }
 
-func (cld *CloudinaryStore) Read(location string) (file File, err error) {
-	//asset, err := cld.cloudinaryInstance.Admin.Asset(context.Background(), admin.AssetParams{
-	//	AssetType: "audio",
-	//	PublicID:  location,
-	//})
+func (cld *CloudinaryStore) Read(locationUrl string) (file File, err error) {
+	resp, err := http.Get(locationUrl)
 
-	asset, err := cld.cloudinaryInstance.Media(location)
+	file, err = NewFile(os.TempDir() + genFileName())
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get asset, %v", err)
 	}
 
-	asset.String()
-	return
+	_, err = io.Copy(file, resp.Body)
+
+	if err == nil {
+		cld.mu.Lock()
+		cld.downloads++
+		cld.mu.Unlock()
+	}
+	return file, nil
 }
 
 func (cld *CloudinaryStore) BulkSave(buf chan<- string, listOfRaw [][]byte) {
-
+	var wg sync.WaitGroup
+	for _, raw := range listOfRaw {
+		wg.Add(1)
+		go func(raw []byte) {
+			defer wg.Done()
+			fileUrl, err := cld.Save(raw)
+			if err != nil {
+				log.Printf("bulk save error: %s", err.Error())
+				buf <- ""
+				return
+			}
+			buf <- fileUrl
+		}(raw)
+	}
+	wg.Wait()
+	close(buf)
 }
 
-func (cld *CloudinaryStore) Remove(fileName string) {
-
+func (cld *CloudinaryStore) Remove(locationUrl string) error {
+	_, err := cld.cloudinaryInstance.Upload.Destroy(context.Background(), uploader.DestroyParams{PublicID: locationUrl})
+	if err != nil {
+		log.Printf("remove resource error: %s", err.Error())
+		return err
+	}
+	return nil
 }

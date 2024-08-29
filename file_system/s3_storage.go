@@ -3,12 +3,14 @@ package filesystem
 import (
 	"bytes"
 	"fmt"
+	"log"
+	"os"
+	"sync"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	s3API "github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"log"
-	"sync"
 )
 
 // S3Store a FileSystem interface def over s3 storage
@@ -67,7 +69,7 @@ func (s3 *S3Store) Read(location string) (file File, err error) {
 	// Create a downloader with the session=
 	downloader := s3manager.NewDownloader(s3.session)
 	// Create a file to write the S3 Object contents to.
-	lfile, err := NewFile(location)
+	lfile, err := NewFile(os.TempDir() + location)
 	file = lfile
 
 	if err != nil {

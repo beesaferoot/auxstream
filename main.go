@@ -4,6 +4,7 @@ import (
 	"auxstream/api"
 	"auxstream/cache"
 	"auxstream/db"
+	fs "auxstream/file_system"
 	"auxstream/utils"
 	"context"
 	"log"
@@ -24,6 +25,12 @@ func main() {
 		Addr: config.RedisAddr,
 	})
 
+	err = fs.SetFileStore(config)
+
+	if err != nil {
+		log.Fatalf("failed set file store: %s", err.Error())
+	}
+
 	server := api.NewServer(api.ServerConfig{
 		Cache: rc,
 		DB:    dB,
@@ -32,7 +39,7 @@ func main() {
 
 	err = server.Run()
 	if err != nil {
-		log.Fatalln("failed to start server")
+		log.Fatalf("failed to start server: ", err.Error())
 	}
 
 }

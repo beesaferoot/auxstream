@@ -64,7 +64,9 @@ func (s *server) SetupRouter(mock bool) *gin.Engine {
 
 func (s *server) setupRouter() *gin.Engine {
 	r := gin.Default()
-
+	
+	r.MaxMultipartMemory = 5 << 20 // 5 miB
+	
 	sessionSecret := []byte(s.conf.SessionString)
 	// Allow cors origin
 	config := cors.New(cors.Config{

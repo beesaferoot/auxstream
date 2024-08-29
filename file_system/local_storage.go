@@ -2,11 +2,12 @@ package filesystem
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 // LocalStore a FileSystem interface definition over localstorage
@@ -134,4 +135,4 @@ func genFileName() string {
 
 var cwd, _ = os.Getwd()
 var rootDir, _ = filepath.Abs(cwd)
-var LStore = NewLocalStore(filepath.Join(rootDir, "uploads"))
+var Store FileSystem = NewLocalStore(filepath.Join(rootDir, "uploads"))

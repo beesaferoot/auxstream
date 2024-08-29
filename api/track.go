@@ -8,6 +8,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -79,6 +80,12 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("audio for track not found"))
 		return
 	}
+
+	if !strings.HasSuffix(file.Filename, ".mp3") {
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("invalid audio format use mp3 instead"))
+		return
+	}
+
 	raw_file, err := file.Open()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unable to access track audio"))
@@ -86,7 +93,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 	}
 	raw_bytes := make([]byte, file.Size)
 	_, err = raw_file.Read(raw_bytes)
-	fileName, err := fs.LStore.Save(raw_bytes)
+	filePath, err := fs.Store.Save(raw_bytes)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(store) audio upload failed: %s", err.Error())))
 		return
@@ -117,7 +124,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		_ = cacheClient.Set(artistCacheKey, artist, 10*time.Hour)
 	}
 
-	track, err := r.CreateTrack(c, trackTittle, trackArtistId, fileName)
+	track, err := r.CreateTrack(c, trackTittle, trackArtistId, filePath)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(db) audio upload failed: %s", err.Error())))
 		return
@@ -196,7 +203,7 @@ func processFiles(files []*multipart.FileHeader) (fileNames []string, err error)
 	buf_channel := make(chan string, len(groupfiles))
 
 	// concurrently write files to disk
-	fs.LStore.BulkSave(buf_channel, groupfiles)
+	fs.Store.BulkSave(buf_channel, groupfiles)
 
 	for fileName := range buf_channel {
 		fileNames = append(fileNames, fileName)
