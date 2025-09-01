@@ -44,7 +44,7 @@ func (r *trackRepo) CreateTrack(ctx context.Context, title string, artistId int,
 func (r *trackRepo) GetTracks(ctx context.Context, limit int, offset int) ([]*Track, error) {
 	var tracks []*Track
 
-	res := r.Db.WithContext(ctx).Preload("Artist").Limit(limit).Offset(offset).Find(&tracks)
+	res := r.Db.WithContext(ctx).Limit(limit).Offset(offset).Find(&tracks)
 
 	if res.Error != nil {
 		return tracks, res.Error

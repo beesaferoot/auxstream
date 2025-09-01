@@ -44,7 +44,7 @@ func TestBulkSave(t *testing.T) {
 	var groupfiles [][]byte
 	var fileNames []string
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		groupfiles = append(groupfiles, []byte("hello world"))
 	}
 	buf := make(chan string, len(groupfiles))
