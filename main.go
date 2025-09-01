@@ -18,7 +18,10 @@ func main() {
 	if err != nil {
 		log.Fatal("could not load env config: ", err.Error())
 	}
-	dB := db.InitDB(config, context.Background())
+
+	// Initialize database with GORM
+	database := db.InitDB(config, context.Background())
+
 	gin.SetMode(config.GinMode)
 
 	rc := cache.NewRedis(&redis.Options{
@@ -33,13 +36,13 @@ func main() {
 
 	server := api.NewServer(api.ServerConfig{
 		Cache: rc,
-		DB:    dB,
+		DB:    database,
 		Conf:  config,
 	})
 
 	err = server.Run()
 	if err != nil {
-		log.Fatalf("failed to start server: ", err.Error())
+		log.Fatalf("failed to start server: %s", err.Error())
 	}
 
 }

@@ -4,11 +4,14 @@ postgres:
 createdb:
 	docker exec -it postgres14-auxstream createdb --username=root --owner=root auxstreamdb
 
+init-migration-schema:
+	go run cmd/migration/main.go init 
+	
 setup-db:
-	migrate -path db/migration -database "postgresql://postgres:secret@localhost:5432/auxstreamdb?sslmode=disable" --verbose up
+	go run cmd/migration/main.go up 
 
-teardown-db:
-	migrate -path db/migration -database "postgresql://postgres:secret@localhost:5432/auxstreamdb?sslmode=disable" --verbose down
+rollback-db:
+	go run cmd/migration/main.go down
 
 test: 
 	go test -v ./tests -coverpkg=./...

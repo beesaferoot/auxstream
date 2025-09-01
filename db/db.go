@@ -6,33 +6,51 @@ import (
 	"log"
 	"os"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-// DbConn  abstraction over pgx.Conn which allows for mock testing
-type DbConn interface {
-	Begin(ctx context.Context) (pgx.Tx, error)
-	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, optionsAndArgs ...interface{}) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, optionsAndArgs ...interface{}) pgx.Row
-	Close(ctx context.Context) error
-	CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error)
-}
+// InitDB initializes a GORM database connection with pgx driver
+func InitDB(config utils.Config, ctx context.Context) *gorm.DB {
+	// Configure GORM logger
+	gormLogger := logger.Default.LogMode(logger.Info)
+	if config.GinMode == "release" {
+		gormLogger = logger.Default.LogMode(logger.Error)
+	}
 
-func InitDB(config utils.Config, ctx context.Context) DbConn {
-	conn, err := pgx.Connect(ctx, config.DBUrl)
+	// Open database connection using GORM with pgx driver
+	db, err := gorm.Open(postgres.Open(config.DBUrl), &gorm.Config{
+		Logger: gormLogger,
+	})
 
 	if err != nil {
 		log.Printf("Unable to connect to database: %v\n", err)
 		os.Exit(1)
 	}
-	return conn
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Printf("Unable to get underlying sql.DB: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Configure connection pool
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	
+	return db
 }
 
-func closeDB(conn DbConn, ctx context.Context) {
-	err := conn.Close(ctx)
+// CloseDB closes the database connection
+func CloseDB(db *gorm.DB) {
+	sqlDB, err := db.DB()
 	if err != nil {
-		log.Println(err)
+		log.Printf("Unable to get underlying sql.DB: %v\n", err)
+		return
+	}
+
+	if err := sqlDB.Close(); err != nil {
+		log.Printf("Error closing database: %v\n", err)
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"auxstream/api"
 	"auxstream/cache"
 	fs "auxstream/file_system"
-	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http/httptest"
@@ -15,25 +15,38 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/imroc/req"
-	"github.com/jackc/pgx/v5"
-	"github.com/pashagolub/pgxmock/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 var cwd, _ = os.Getwd()
 var testDataPath = filepath.Join(cwd, "testdata")
-var mockConn pgxmock.PgxConnIface
+var mockDB *sql.DB
+var sqlMock sqlmock.Sqlmock
 var router *gin.Engine
+var gormDB *gorm.DB
 
 func setupTest(_ *testing.T) func(t *testing.T) {
 	var err error
-	mockConn, err = pgxmock.NewConn()
+
+	// Create a mock sql.DB using go-sqlmock
+	mockDB, sqlMock, err = sqlmock.New()
 	if err != nil {
-		log.Fatalf("Failed to set up mock database connection: %v", err)
+		log.Fatalf("Failed to create mock database: %v", err)
+	}
+
+	// Create a GORM DB instance using the mock sql.DB
+	gormDB, err = gorm.Open(postgres.New(postgres.Config{
+		Conn: mockDB,
+	}), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to create GORM mock DB: %v", err)
 	}
 
 	mr, _ := miniredis.Run()
@@ -41,31 +54,33 @@ func setupTest(_ *testing.T) func(t *testing.T) {
 		Addr: mr.Addr(),
 	}
 	r := cache.NewRedis(opts)
-	server := api.NewMockServer(mockConn, r)
+	server := api.NewMockServer(gormDB, r)
 	router = server.SetupRouter(true)
 
 	return tearDownTest
 }
 
 func tearDownTest(_ *testing.T) {
-	_ = mockConn.Close(context.Background())
+	_ = mockDB.Close()
 }
 
 func TestHTTPAddTrack(t *testing.T) {
 	teardown := setupTest(t)
 	defer teardown(t)
 
-	columns := []string{"id", "created_at"}
-	mockConn.ExpectQuery("SELECT name, created_at FROM auxstream.artists").
-		WithArgs(1).
-		WillReturnRows(pgxmock.NewRows([]string{"name", "created_at"}).
-		AddRow("Hike", time.Now()))
+	// Mock artist lookup
+	sqlMock.ExpectQuery(`SELECT .* FROM "auxstream"\."artists"`).
+		WithArgs(1, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "created_at", "updated_at"}).
+			AddRow(1, "Hike", time.Now(), time.Now()))
 
-	mockConn.ExpectQuery("INSERT INTO auxstream.tracks").
-		WithArgs("Sample Title", 1, pgxmock.AnyArg()).
-		WillReturnRows(pgxmock.NewRows(columns).AddRow(1, time.Now()))
-	mockConn.ExpectCommit()
-	// mock real store with test store
+	sqlMock.ExpectBegin()
+	// Mock track creation
+	sqlMock.ExpectQuery(`INSERT INTO "auxstream"\."tracks"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	sqlMock.ExpectCommit()
+
+	// Mock real store with test store
 	fs.Store = fs.NewLocalStore(os.TempDir())
 	tserver := httptest.NewServer(router)
 	defer tserver.Close()
@@ -90,45 +105,52 @@ func TestHTTPAddTrack(t *testing.T) {
 	})
 	require.Equal(t, 200, post.Response().StatusCode)
 	require.Equal(t, fs.Store.Writes(), 1)
-	data := &map[string]interface{}{}
+	data := &map[string]any{}
 	err = post.ToJSON(data)
 	require.NoError(t, err)
-	// fmt.Println("response body: ", data)
+	// Ensure all expectations were met
+	require.NoError(t, sqlMock.ExpectationsWereMet())
 }
 
 func TestHTTPSearchByArtist(t *testing.T) {
 	teardown := setupTest(t)
 	defer teardown(t)
 
-	columns := []string{"id", "title", "artist_id", "file", "created_at"}
-	mockConn.ExpectQuery(`
-	SELECT t.id, t.title, t.artist_id, t.file, t.created_at
-	`).
-		WithArgs("Hike").
-		WillReturnRows(pgxmock.NewRows(columns).
-			AddRow(1, "Title", 1, "Test file", time.Now()).
-			AddRow(1, "Title", 1, "Test file", time.Now()).
-			AddRow(1, "Title", 1, "Test file", time.Now()))
+	
+	// Expect Preloaded artist 
+	// Mock the JOIN query for artist search
+	sqlMock.ExpectQuery(`SELECT .* FROM "auxstream"\."tracks" JOIN auxstream.artists`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "artist_id", "file", "created_at", "updated_at"}).
+			AddRow(1, "Title", 1, "Test file", time.Now(), time.Now()).
+			AddRow(2, "Title", 1, "Test file", time.Now(), time.Now()).
+			AddRow(3, "Title", 1, "Test file", time.Now(), time.Now()))
+
 	tserver := httptest.NewServer(router)
 	defer tserver.Close()
 
 	resp, err := req.Get(tserver.URL + "/search?artist=Hike")
 
 	require.NoError(t, err)
-	require.Equal(t, resp.Response().StatusCode, 200)
-	data := &map[string]interface{}{}
+	require.Equal(t, 200, resp.Response().StatusCode)
+	data := &map[string]any{}
 	err = resp.ToJSON(data)
 	require.NoError(t, err)
-	//fmt.Println("response body: ", data)
+
+	// Ensure all expectations were met
+	require.NoError(t, sqlMock.ExpectationsWereMet())
 }
 
 func TestHTTPTrackUploadBatch(t *testing.T) {
-
 	teardown := setupTest(t)
 	defer teardown(t)
 	testRecordCnt := 30
-	mockConn.ExpectCopyFrom(pgx.Identifier{"auxstream", "tracks"}, []string{"title", "artist_id", "file"}).
-		WillReturnResult(int64(testRecordCnt))
+
+	// Mock batch insert
+	for i := range testRecordCnt {
+		sqlMock.ExpectQuery("INSERT INTO auxstream.tracks").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(i + 1))
+	}
+
 	fs.Store = fs.NewLocalStore(os.TempDir())
 	var err error
 	var trackFiles []req.FileUpload
@@ -138,7 +160,7 @@ func TestHTTPTrackUploadBatch(t *testing.T) {
 
 	tserver := httptest.NewServer(router)
 
-	for i := 0; i < testRecordCnt; i++ {
+	for range testRecordCnt {
 		file, err := os.Open(audioFilePath)
 		require.NoError(t, err)
 		trackFiles = append(trackFiles, req.FileUpload{
@@ -150,32 +172,32 @@ func TestHTTPTrackUploadBatch(t *testing.T) {
 
 	formData := url.Values{}
 	formData.Add("artist_id", strconv.Itoa(artistId))
-	for i := 0; i < testRecordCnt; i++ {
+	for i := range testRecordCnt {
 		formData.Add("track_titles", fmt.Sprintf("#%d", i))
 	}
 
 	post, err := req.Post(tserver.URL+"/upload_batch_track", formData, trackFiles)
 	require.NoError(t, err)
-	data := &map[string]interface{}{}
+	data := &map[string]any{}
 	err = post.ToJSON(data)
 	require.NoError(t, err)
-	//fmt.Println("response body: ", data)
-	require.Equal(t, post.Response().StatusCode, 200)
+	require.Equal(t, 200, post.Response().StatusCode,)
+
+	// Ensure all expectations were met
+	require.NoError(t, sqlMock.ExpectationsWereMet())
 }
 
 func TestHTTPFetchTracks(t *testing.T) {
 	teardown := setupTest(t)
 	defer teardown(t)
 
-	columns := []string{"id", "title", "artist_id", "file", "created_at"}
-	mockConn.ExpectQuery(`
-	SELECT id, title, artist_id, file, created_at
-	`).
-		WithArgs(int8(2), int8(0)).
-		WillReturnRows(pgxmock.NewRows(columns).
-			AddRow(1, "Title", 1, "Test file", time.Now()).
-			AddRow(1, "Title", 1, "Test file", time.Now()).
-			AddRow(1, "Title", 1, "Test file", time.Now()))
+	// Mock tracks query with pagination
+	sqlMock.ExpectQuery("SELECT (.+) FROM auxstream.tracks").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "artist_id", "file", "created_at", "updated_at"}).
+			AddRow(1, "Title", 1, "Test file", time.Now(), time.Now()).
+			AddRow(2, "Title", 1, "Test file", time.Now(), time.Now()).
+			AddRow(3, "Title", 1, "Test file", time.Now(), time.Now()))
+
 	tserver := httptest.NewServer(router)
 	defer tserver.Close()
 
@@ -183,10 +205,13 @@ func TestHTTPFetchTracks(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, 200, resp.Response().StatusCode)
-	data := &map[string]interface{}{}
+	data := &map[string]any{}
 	err = resp.ToJSON(data)
 	require.NoError(t, err)
 	require.NotZero(t, data)
 	resData := (*data)["data"]
 	require.NotEmpty(t, resData)
+
+	// Ensure all expectations were met
+	require.NoError(t, sqlMock.ExpectationsWereMet())
 }

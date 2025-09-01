@@ -30,8 +30,8 @@ func FetchTracksByArtistHandler(c *gin.Context, r db.TrackRepo) {
 }
 
 type FetchTrackQueryParams struct {
-	PageSize int8 `form:"pagesize" binding:"gte=0"`
-	PageNum  int8 `form:"pagenumber" binding:"gte=1"`
+	PageSize int `form:"pagesize" binding:"gte=0"`
+	PageNum  int `form:"pagenumber" binding:"gte=1"`
 }
 
 // FetchTracksHandler fetch paginated tracks with limit on page size
@@ -99,7 +99,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		return
 	}
 
-	artist := &db.Artist{Id: trackArtistId}
+	artist := &db.Artist{ID: uint(trackArtistId)}
 
 	ctx := c.Request.Context()
 	cacheClient, ok := ctx.Value("cacheClient").(cache.Cache)
@@ -107,7 +107,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 	artistCacheKey := "artist-id-" + fmt.Sprintf("%d", trackArtistId)
 	// cache client exists
 	if ok {
-		err = cacheClient.Get(artistCacheKey, artist)
+		err = cacheClient.Get(artistCacheKey, &cache.Cacheable[db.Artist]{Value: artist})
 		if err != nil {
 			log.Printf("(Get artist id from cache) failed: %s\n", err.Error())
 			err = nil
@@ -116,16 +116,18 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 
 	// artist should point to a value from cache if cache hit was successful
 	if artist.Name == "" {
-		artist, err = artistRepo.GetArtistById(c, trackArtistId)
+		artist, err = artistRepo.GetArtistById(c, uint(trackArtistId))
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, errorResponse(fmt.Sprintf("artist with id (%d) does not exists: %s", trackArtistId, err.Error())))
 			return
 		}
-		_ = cacheClient.Set(artistCacheKey, artist, 10*time.Hour)
+		_ = cacheClient.Set(artistCacheKey, &cache.Cacheable[db.Artist]{Value: artist}, 10*time.Hour)
 	}
 
 	track, err := r.CreateTrack(c, trackTittle, trackArtistId, filePath)
 	if err != nil {
+		fmt.Printf("Artist: %v\n", artist)
+		fmt.Printf("Error: %s\n", err.Error())
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(db) audio upload failed: %s", err.Error())))
 		return
 	}
@@ -165,7 +167,7 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 			filteredFileNames = append(filteredFileNames, fileName)
 		}
 	}
-	rows, err := r.BulkCreateTracks(c, trackTitles, reqForm.ArtistId, filteredFileNames)
+	rows, err := r.BulkCreateTracks(c, trackTitles, uint(reqForm.ArtistId), filteredFileNames)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))

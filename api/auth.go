@@ -76,7 +76,7 @@ func Login(c *gin.Context, r db.UserRepo) {
 		return
 	}
 	// Save the userid in the session
-	session.Set(userKey, user.Id)
+	session.Set(userKey, user.ID)
 	if err := session.Save(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save session"})
 		return

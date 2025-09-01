@@ -2,9 +2,23 @@ package cache
 
 import (
 	"context"
-	"github.com/redis/go-redis/v9"
+	"encoding/json"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
+
+type Cacheable[T any] struct {
+	Value *T
+}
+
+func (c *Cacheable[T]) MarshalBinary() ([]byte, error) {
+	return json.Marshal(c.Value)
+}
+
+func (c *Cacheable[T]) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, &c.Value)
+}
 
 type Unmarshable interface {
 	UnmarshalBinary(data []byte) error

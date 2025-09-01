@@ -3,144 +3,92 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5"
 	"gopkg.in/validator.v2"
+	"gorm.io/gorm"
 )
 
 type TrackRepo interface {
 	CreateTrack(ctx context.Context, title string, artistId int, filePath string) (*Track, error)
-	GetTracks(ctx context.Context, limit int8, offset int8) ([]*Track, error)
+	GetTracks(ctx context.Context, limit int, offset int) ([]*Track, error)
 	GetTrackByTitle(ctx context.Context, title string) ([]*Track, error)
 	GetTrackByArtist(ctx context.Context, artist string) ([]*Track, error)
-	BulkCreateTracks(ctx context.Context, trackTitles []string, artistId int, fileNames []string) (int64, error)
+	BulkCreateTracks(ctx context.Context, trackTitles []string, artistId uint, fileNames []string) (int64, error)
 }
 
 type trackRepo struct {
-	Db DbConn
+	Db *gorm.DB
 }
 
-func NewTrackRepo(db DbConn) TrackRepo {
+func NewTrackRepo(db *gorm.DB) TrackRepo {
 	return &trackRepo{
 		Db: db,
 	}
 }
 
 func (r *trackRepo) CreateTrack(ctx context.Context, title string, artistId int, filePath string) (*Track, error) {
-	track := &Track{}
-	track.ArtistId = artistId
-	track.Title = title
-	track.File = filePath
+	track := &Track{
+		Title:    title,
+		ArtistID: uint(artistId),
+		File:     filePath,
+	}
 
 	if err := validator.Validate(track); err != nil {
 		return nil, err
 	}
 
-	stmt := `INSERT INTO auxstream.tracks (title, artist_id, file)
-             VALUES ($1, $2, $3)
-             RETURNING id, created_at
-             `
-	row := r.Db.QueryRow(ctx, stmt, track.Title, track.ArtistId, track.File)
+	res := r.Db.WithContext(ctx).Create(track)
 
-	err := row.Scan(&track.Id, &track.CreatedAt)
-	return track, err
+	return track, res.Error
 }
 
-func (r *trackRepo) GetTracks(ctx context.Context, limit int8, offset int8) ([]*Track, error) {
-	tracks := []*Track{}
-	stmt := `SELECT id, title, artist_id, file, created_at
-			 FROM auxstream.tracks
-			 LIMIT $1
-			 OFFSET $2
-			 `
-	rows, err := r.Db.Query(ctx, stmt, limit, offset)
-	if err != nil {
-		return nil, err
+func (r *trackRepo) GetTracks(ctx context.Context, limit int, offset int) ([]*Track, error) {
+	var tracks []*Track
+
+	res := r.Db.WithContext(ctx).Preload("Artist").Limit(limit).Offset(offset).Find(&tracks)
+
+	if res.Error != nil {
+		return tracks, res.Error
 	}
 
-	defer rows.Close()
-
-	for rows.Next() {
-		track := &Track{}
-		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.File, &track.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-	err = rows.Err()
-	if err != nil {
-		return nil, err
-	}
 	return tracks, nil
 }
 
 func (r *trackRepo) GetTrackByTitle(ctx context.Context, title string) ([]*Track, error) {
-	tracks := []*Track{}
-	stmt := `SELECT id, title, artist_id, file, created_at
-			 FROM auxstream.tracks
-			 WHERE title = $1
-			 `
-	rows, err := r.Db.Query(ctx, stmt, title)
-	if err != nil {
-		return nil, err
+	var tracks []*Track
+	res := r.Db.WithContext(ctx).Preload("Artist").Where("title ILIKE ?", "%"+title+"%").Find(&tracks)
+
+	if res.Error != nil {
+		return tracks, res.Error
 	}
 
-	defer rows.Close()
-
-	for rows.Next() {
-		track := &Track{}
-		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.File, &track.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-	err = rows.Err()
-	if err != nil {
-		return nil, err
-	}
 	return tracks, nil
 }
 
 func (r *trackRepo) GetTrackByArtist(ctx context.Context, artist string) ([]*Track, error) {
-	tracks := []*Track{}
-	stmt := `SELECT t.id, t.title, t.artist_id, t.file, t.created_at
-	FROM auxstream.tracks AS t
-	JOIN auxstream.artists AS a ON t.artist_id = a.id
-	WHERE a.name = $1
-	`
-	rows, err := r.Db.Query(ctx, stmt, artist)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+	var tracks []*Track
+	res := r.Db.WithContext(ctx).Joins("JOIN auxstream.artists ON auxstream.tracks.artist_id = auxstream.artists.id").
+		Where("auxstream.artists.name ILIKE ?", "%"+artist+"%").
+		Find(&tracks)
 
-	for rows.Next() {
-		track := &Track{}
-		err = rows.Scan(&track.Id, &track.Title, &track.ArtistId, &track.File, &track.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
+	if res.Error != nil {
+		return tracks, res.Error
 	}
-	err = rows.Err()
-	if err != nil {
-		return nil, err
-	}
+
 	return tracks, nil
 }
 
-func (r *trackRepo) BulkCreateTracks(ctx context.Context, trackTitles []string, artistId int, fileNames []string) (int64, error) {
-	var rows [][]interface{}
+func (r *trackRepo) BulkCreateTracks(ctx context.Context, trackTitles []string, artistId uint, fileNames []string) (int64, error) {
+	var tracks []Track
 
 	for idx, title := range trackTitles {
-		rows = append(rows, []interface{}{title, artistId, fileNames[idx]})
+		tracks = append(tracks, Track{
+			Title:    title,
+			ArtistID: artistId,
+			File:     fileNames[idx],
+		})
 	}
-	count, err := r.Db.CopyFrom(
-		ctx,
-		pgx.Identifier{"auxstream", "tracks"},
-		[]string{"title", "artist_id", "file"},
-		pgx.CopyFromRows(rows),
-	)
-	return count, err
+
+	res := r.Db.WithContext(ctx).CreateInBatches(tracks, 100)
+
+	return res.RowsAffected, res.Error
 }

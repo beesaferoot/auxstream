@@ -10,6 +10,7 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Server interface {
@@ -18,13 +19,13 @@ type Server interface {
 }
 
 type ServerConfig struct {
-	DB    db.DbConn
+	DB    *gorm.DB
 	Cache cache.Cache
 	Conf  utils.Config
 }
 
 type server struct {
-	db    db.DbConn
+	db    *gorm.DB
 	cache cache.Cache
 	conf  utils.Config
 }
@@ -37,7 +38,7 @@ func NewServer(serverConfig ServerConfig) Server {
 	}
 }
 
-func NewMockServer(db db.DbConn, cache cache.Cache) Server {
+func NewMockServer(db *gorm.DB, cache cache.Cache) Server {
 	return &server{
 		db:    db,
 		cache: cache,
@@ -64,9 +65,9 @@ func (s *server) SetupRouter(mock bool) *gin.Engine {
 
 func (s *server) setupRouter() *gin.Engine {
 	r := gin.Default()
-	
+
 	r.MaxMultipartMemory = 5 << 20 // 5 miB
-	
+
 	sessionSecret := []byte(s.conf.SessionString)
 	// Allow cors origin
 	config := cors.New(cors.Config{

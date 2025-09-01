@@ -1,0 +1,30 @@
+[Unit]
+Description=AuxStream Music Streaming Service
+Documentation=https://github.com/beesaferoot/auxstream
+After=network.target
+
+[Service]
+Type=simple
+User=beesaferoot
+WorkingDirectory=/home/beesafe/apps/auxstream
+EnvironmentFile=/home/beesafe/apps/auxstream/app.env
+ExecStart=/home/beesafe/apps/auxstream/auxstream
+ExecReload=/bin/kill -HUP $MAINPID
+User=beesaferoot
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=auxstream
+
+
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/beesafe/apps/auxstream/uploads /var/log/auxstream
+ReadOnlyPaths=/home/beesafe/apps/auxstream
+
+[Install]
+WantedBy=multi-user.target

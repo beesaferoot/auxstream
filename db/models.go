@@ -1,53 +1,54 @@
 package db
 
 import (
-	"encoding/json"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type User struct {
-	Id           int       `json:"id"`
-	Username     string    `json:"username" validate:"min=4,nonzero"`
-	PasswordHash string    `json:"password_hash"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           uint           `json:"id" gorm:"primaryKey"`
+	Username     string         `json:"username" gorm:"uniqueIndex;not null" validate:"min=4,nonzero"`
+	PasswordHash string         `json:"password_hash" gorm:"not null"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+}
+
+func (User) TableName() string {
+	return "auxstream.users"
 }
 
 type Track struct {
-	Id        int       `json:"id"`
-	Title     string    `json:"title" validate:"nonzero"`
-	ArtistId  int       `json:"artist_id"`
-	File      string    `json:"file"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Title     string         `json:"title" gorm:"not null" validate:"nonzero"`
+	ArtistID  uint           `json:"artist_id" gorm:"not null"`
+	Artist    Artist         `json:"artist" gorm:"foreignKey:ArtistID" validate:"-"`
+	File      string         `json:"file" gorm:"not null"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+}
+
+func (Track) TableName() string {
+	return "auxstream.tracks"
 }
 
 type Artist struct {
-	Id        int       `json:"id"`
-	Name      string    `json:"name" validate:"nonzero"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Name      string         `json:"name" gorm:"uniqueIndex;not null" validate:"nonzero"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+	Tracks    []Track        `json:"tracks" gorm:"foreignKey:ArtistID"`
 }
 
-func (user *User) MarshalBinary() ([]byte, error) {
-	return json.Marshal(user)
+func (Artist) TableName() string {
+	return "auxstream.artists"
 }
 
-func (user *User) UnmarshalBinary(data []byte) error {
-	return json.Unmarshal(data, user)
+var ModelTypeRegistry = map[string]any{
+	"User":   User{},
+	"Track":  Track{},
+	"Artist": Artist{},
 }
-
-func (track *Track) MarshalBinary() ([]byte, error) {
-	return json.Marshal(track)
-}
-
-func (track *Track) UnmarshalBinary(data []byte) error {
-	return json.Unmarshal(data, track)
-}
-
-func (artist *Artist) MarshalBinary() ([]byte, error) {
-	return json.Marshal(artist)
-}
-
-func (artist *Artist) UnmarshalBinary(data []byte) error {
-	return json.Unmarshal(data, artist)
-}
-
-
