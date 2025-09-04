@@ -20,7 +20,7 @@ func init() {
 }
 
 func main() {
-	_ = godotenv.Load() // optionally load environment file
+	_ = godotenv.Load("app.env") // optionally load environment file
 	rootCmd := &cobra.Command{
 		Use:   "migration",
 		Short: "Database Migration Tool",

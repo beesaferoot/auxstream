@@ -5,15 +5,21 @@ createdb:
 	docker exec -it postgres14-auxstream createdb --username=root --owner=root auxstreamdb
 
 init-migration-schema:
-	go run cmd/migration/main.go init 
-	
+	go run cmd/migration/main.go init
+
 setup-db:
-	go run cmd/migration/main.go up 
+	go run cmd/migration/main.go up
 
 rollback-db:
 	go run cmd/migration/main.go down
 
-test: 
+migration-history:
+	go run cmd/migration/main.go history
+
+migration-status:
+	go run cmd/migration/main.go status
+
+test:
 	go test -v ./tests -coverpkg=./...
 
 run:
@@ -23,4 +29,4 @@ run:
 build:
 	go build -o build/auxstream
 
-.PHONY: test run createdb setup-db teardown-db
+.PHONY: test run createdb setup-db teardown-db rollback-db init-migration-schema migration-history migration-status
