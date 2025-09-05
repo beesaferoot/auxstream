@@ -21,10 +21,9 @@ SyslogIdentifier=auxstream
 # Security settings
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/home/beesafe/apps/auxstream/uploads /var/log/auxstream
-ReadOnlyPaths=/home/beesafe/apps/auxstream
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/beesafe/apps/auxstream/uploads
 
 [Install]
 WantedBy=multi-user.target
