@@ -12,7 +12,7 @@ func init() {
 		Name:      "init_db_schema",
 		CreatedAt: time.Now(),
 		Up: func(db *gorm.DB) error {
-			if err := db.Exec(`CREATE SCHEMA IF NOT EXISTS auxstream;`).Error; err != nil {
+			if err := db.Exec(`CREATE SCHEMA IF NOT EXISTS auxstream AUTHORIZATION CURRENT_USER;`).Error; err != nil {
 				return err
 			}
 			if err := db.Exec(`CREATE TABLE auxstream.artists (
