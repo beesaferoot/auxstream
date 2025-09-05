@@ -5,12 +5,12 @@ After=network.target
 
 [Service]
 Type=simple
-User=beesaferoot
+User=beesafe
 WorkingDirectory=/home/beesafe/apps/auxstream
 EnvironmentFile=/home/beesafe/apps/auxstream/app.env
 ExecStart=/home/beesafe/apps/auxstream/build/auxstream
 ExecReload=/bin/kill -HUP $MAINPID
-User=beesaferoot
+User=beesafe
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal
