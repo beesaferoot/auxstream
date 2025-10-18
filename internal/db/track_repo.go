@@ -3,16 +3,17 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"gopkg.in/validator.v2"
 	"gorm.io/gorm"
 )
 
 type TrackRepo interface {
-	CreateTrack(ctx context.Context, title string, artistId int, filePath string) (*Track, error)
+	CreateTrack(ctx context.Context, title string, artistId uuid.UUID, filePath string) (*Track, error)
 	GetTracks(ctx context.Context, limit int, offset int) ([]*Track, error)
 	GetTrackByTitle(ctx context.Context, title string) ([]*Track, error)
 	GetTrackByArtist(ctx context.Context, artist string) ([]*Track, error)
-	BulkCreateTracks(ctx context.Context, trackTitles []string, artistId uint, fileNames []string) (int64, error)
+	BulkCreateTracks(ctx context.Context, trackTitles []string, artistId uuid.UUID, fileNames []string) (int64, error)
 }
 
 type trackRepo struct {
@@ -25,10 +26,10 @@ func NewTrackRepo(db *gorm.DB) TrackRepo {
 	}
 }
 
-func (r *trackRepo) CreateTrack(ctx context.Context, title string, artistId int, filePath string) (*Track, error) {
+func (r *trackRepo) CreateTrack(ctx context.Context, title string, artistId uuid.UUID, filePath string) (*Track, error) {
 	track := &Track{
 		Title:    title,
-		ArtistID: uint(artistId),
+		ArtistID: artistId,
 		File:     filePath,
 	}
 
@@ -77,7 +78,7 @@ func (r *trackRepo) GetTrackByArtist(ctx context.Context, artist string) ([]*Tra
 	return tracks, nil
 }
 
-func (r *trackRepo) BulkCreateTracks(ctx context.Context, trackTitles []string, artistId uint, fileNames []string) (int64, error) {
+func (r *trackRepo) BulkCreateTracks(ctx context.Context, trackTitles []string, artistId uuid.UUID, fileNames []string) (int64, error) {
 	var tracks []Track
 
 	for idx, title := range trackTitles {

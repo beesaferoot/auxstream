@@ -1,7 +1,7 @@
 package db
 
 import (
-	"auxstream/utils"
+	"auxstream/config"
 	"context"
 	"log"
 	"os"
@@ -12,7 +12,7 @@ import (
 )
 
 // InitDB initializes a GORM database connection with pgx driver
-func InitDB(config utils.Config, ctx context.Context) *gorm.DB {
+func InitDB(config config.Config, ctx context.Context) *gorm.DB {
 	// Configure GORM logger
 	gormLogger := logger.Default.LogMode(logger.Info)
 	if config.GinMode == "release" {

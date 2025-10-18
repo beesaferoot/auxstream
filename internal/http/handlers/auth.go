@@ -1,119 +1,335 @@
 package handlers
 
 import (
+	"auxstream/internal/auth"
 	"auxstream/internal/db"
 	"log"
 	"net/http"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// cookie based auth session
-// credits: https://github.com/Depado/gin-auth-example
-const userKey = "user"
-
-func CookieAuthMiddleware(c *gin.Context) {
-	session := sessions.Default(c)
-	userId := session.Get(userKey)
-	if userId == nil {
-		// Abort the request with the appropriate error code
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	// Continue down the chain to handler etc
-	c.Next()
+type AuthService struct {
+	userRepo       db.UserRepo
+	jwtService     *auth.JWTService
+	refreshService *auth.RefreshTokenService
+	oauthService   *auth.OAuthService
 }
 
-type AuthForm struct {
-	Username string `form:"username" binding:"required"`
-	Password string `form:"password" binding:"required"`
+func NewAuthService(userRepo db.UserRepo, jwtService *auth.JWTService, refreshService *auth.RefreshTokenService, oauthService *auth.OAuthService) *AuthService {
+	return &AuthService{
+		userRepo:       userRepo,
+		jwtService:     jwtService,
+		refreshService: refreshService,
+		oauthService:   oauthService,
+	}
 }
 
-func Signup(c *gin.Context, r db.UserRepo) {
-	var form AuthForm
+type RegisterRequest struct {
+	Username string `json:"username" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
+}
 
-	if err := c.ShouldBind(&form); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+type LoginRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
+}
+
+type TokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"`
+	TokenType    string `json:"token_type"`
+}
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// Register handles user registration with email and password
+func (a *AuthService) Register(c *gin.Context) {
+	var req RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	pHash, err := hashPassword(form.Password)
+	// Check if user already exists
+	_, err := a.userRepo.GetUserByEmail(c.Request.Context(), req.Email)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "User with this email already exists"})
+		return
+	}
+
+	// Hash password
+	hashedPassword, err := hashPassword(req.Password)
 	if err != nil {
-		log.Println("password hash failure: ", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
-		return
-	}
-	_, err = r.CreateUser(c, form.Username, pHash)
-	if err != nil {
-		log.Println("CreateUser: ", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to signup user"})
+		log.Printf("Password hash failure: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "successfully signed up user"})
+	// Create user
+	user := &db.User{
+		Username:     req.Username,
+		Email:        req.Email,
+		PasswordHash: hashedPassword,
+		Provider:     "local",
+	}
+
+	createdUser, err := a.userRepo.CreateUser(c.Request.Context(), user)
+	if err != nil {
+		log.Printf("CreateUser error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		return
+	}
+
+	// Generate tokens
+	accessToken, err := a.jwtService.GenerateAccessToken(createdUser.ID, createdUser.Username, createdUser.Email)
+	if err != nil {
+		log.Printf("GenerateAccessToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
+		return
+	}
+
+	refreshToken, err := a.refreshService.GenerateAndStoreRefreshToken(c.Request.Context(), createdUser.ID)
+	if err != nil {
+		log.Printf("GenerateRefreshToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
+		return
+	}
+
+	response := TokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    3600, // 1 hour in seconds
+		TokenType:    "Bearer",
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "User registered successfully",
+		"data":    response,
+	})
 }
 
-func Login(c *gin.Context, r db.UserRepo) {
-	session := sessions.Default(c)
-
-	var form AuthForm
-
-	if err := c.ShouldBind(&form); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+// Login handles user login with email and password
+func (a *AuthService) Login(c *gin.Context) {
+	var req LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := r.GetUserByUsername(c, form.Username)
+	// Get user by email
+	user, err := a.userRepo.GetUserByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	if !cmpHashString(user.PasswordHash, form.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+	// Check password
+	if !cmpHashString(user.PasswordHash, req.Password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
-	// Save the userid in the session
-	session.Set(userKey, user.ID)
-	if err := session.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save session"})
+
+	// Generate tokens
+	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Username, user.Email)
+	if err != nil {
+		log.Printf("GenerateAccessToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "successfully authenticated user"})
+
+	refreshToken, err := a.refreshService.GenerateAndStoreRefreshToken(c.Request.Context(), user.ID)
+	if err != nil {
+		log.Printf("GenerateRefreshToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
+		return
+	}
+
+	response := TokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    3600, // 1 hour in seconds
+		TokenType:    "Bearer",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Login successful",
+		"data":    response,
+	})
 }
 
-func Logout(c *gin.Context) {
-	session := sessions.Default(c)
-	user := session.Get(userKey)
-	if user == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session token"})
+// RefreshToken handles refresh token requests
+func (a *AuthService) RefreshToken(c *gin.Context) {
+	var req RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	session.Delete("user")
-	if err := session.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save session"})
+
+	// Validate refresh token
+	claims, err := a.jwtService.ValidateRefreshToken(req.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "successfully logged out"})
+
+	// Check if refresh token exists in Redis
+	userID, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token subject"})
+		return
+	}
+
+	_, err = a.refreshService.ValidateRefreshToken(c.Request.Context(), claims.ID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token not found or expired"})
+		return
+	}
+
+	// Get user
+	user, err := a.userRepo.GetUserById(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Generate new access token
+	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Username, user.Email)
+	if err != nil {
+		log.Printf("GenerateAccessToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
+		return
+	}
+
+	response := TokenResponse{
+		AccessToken: accessToken,
+		ExpiresIn:   3600, // 1 hour in seconds
+		TokenType:   "Bearer",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Token refreshed successfully",
+		"data":    response,
+	})
 }
 
-func hashPassword(password string) (hash string, err error) {
-	// Generate a bcrypt hash of the password
-	hashByte, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+// Logout handles user logout and token revocation
+func (a *AuthService) Logout(c *gin.Context) {
+	// Get refresh token from request body
+	var req RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate refresh token to get token ID
+	claims, err := a.jwtService.ValidateRefreshToken(req.RefreshToken)
 	if err != nil {
-		log.Println("Error generating hash:", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid refresh token"})
+		return
+	}
+
+	// Revoke refresh token
+	err = a.refreshService.RevokeRefreshToken(c.Request.Context(), claims.ID)
+	if err != nil {
+		log.Printf("RevokeRefreshToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to logout"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
+}
+
+// GoogleAuth initiates Google OAuth flow
+func (a *AuthService) GoogleAuth(c *gin.Context) {
+	state := uuid.New().String()
+	authURL := a.oauthService.GetAuthURL(state)
+
+	// Store state in session or Redis for verification
+	// For now, we'll redirect directly
+	c.JSON(http.StatusOK, gin.H{
+		"auth_url": authURL,
+		"state":    state,
+	})
+}
+
+// GoogleCallback handles Google OAuth callback
+func (a *AuthService) GoogleCallback(c *gin.Context) {
+	code := c.Query("code")
+	_ = c.Query("state")
+
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code not provided"})
+		return
+	}
+
+	// Exchange code for token
+	token, err := a.oauthService.ExchangeCodeForToken(c.Request.Context(), code)
+	if err != nil {
+		log.Printf("ExchangeCodeForToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange code for token"})
+		return
+	}
+
+	// Get user info from Google
+	googleUser, err := a.oauthService.GetUserInfo(c.Request.Context(), token)
+	if err != nil {
+		log.Printf("GetUserInfo error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info from Google"})
+		return
+	}
+
+	// Find or create user
+	user, err := a.oauthService.FindOrCreateUser(c.Request.Context(), googleUser)
+	if err != nil {
+		log.Printf("FindOrCreateUser error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create or find user"})
+		return
+	}
+
+	// Generate tokens
+	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Username, user.Email)
+	if err != nil {
+		log.Printf("GenerateAccessToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
+		return
+	}
+
+	refreshToken, err := a.refreshService.GenerateAndStoreRefreshToken(c.Request.Context(), user.ID)
+	if err != nil {
+		log.Printf("GenerateRefreshToken error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
+		return
+	}
+
+	response := TokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    3600, // 1 hour in seconds
+		TokenType:    "Bearer",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Google authentication successful",
+		"data":    response,
+	})
+}
+
+func hashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
 		return "", err
 	}
-	hash = string(hashByte)
-	return
+	return string(hash), nil
 }
 
 func cmpHashString(hash, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	if err == nil {
-		return true
-	}
-	return false
+	return err == nil
 }

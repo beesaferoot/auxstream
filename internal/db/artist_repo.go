@@ -3,13 +3,14 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"gopkg.in/validator.v2"
 	"gorm.io/gorm"
 )
 
 type ArtistRepo interface {
 	CreateArtist(ctx context.Context, name string) (*Artist, error)
-	GetArtistById(ctx context.Context, id uint) (*Artist, error)
+	GetArtistById(ctx context.Context, id uuid.UUID) (*Artist, error)
 }
 
 type artistRepo struct {
@@ -35,7 +36,7 @@ func (r *artistRepo) CreateArtist(ctx context.Context, name string) (*Artist, er
 	return artist, res.Error
 }
 
-func (r *artistRepo) GetArtistById(ctx context.Context, id uint) (*Artist, error) {
+func (r *artistRepo) GetArtistById(ctx context.Context, id uuid.UUID) (*Artist, error) {
 	artist := &Artist{}
 	res := r.Db.WithContext(ctx).First(artist, id)
 	return artist, res.Error

@@ -5,7 +5,7 @@ import (
 	"auxstream/internal/db"
 	"auxstream/internal/http"
 	fs "auxstream/internal/storage"
-	"auxstream/utils"
+	"auxstream/config"
 	"context"
 	"log"
 
@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	config, err := utils.LoadConfig(".")
+	config, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatal("could not load env config: ", err.Error())
 	}

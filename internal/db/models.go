@@ -3,13 +3,17 @@ package db
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type User struct {
-	ID           uint           `json:"id" gorm:"primaryKey"`
-	Username     string         `json:"username" gorm:"uniqueIndex;not null" validate:"min=4,nonzero"`
-	PasswordHash string         `json:"password_hash" gorm:"not null"`
+	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	Username     string         `json:"username" gorm:"uniqueIndex" validate:"min=4,nonzero"`
+	Email        string         `json:"email" gorm:"uniqueIndex" validate:"email"`
+	PasswordHash string         `json:"password_hash" gorm:""`
+	GoogleID     string         `json:"google_id" gorm:"uniqueIndex"`
+	Provider     string  		`json:"provider" gorm:"type:enum('local', 'google');default:'local'"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `json:"deleted_at" gorm:"index"`
@@ -20,9 +24,9 @@ func (User) TableName() string {
 }
 
 type Track struct {
-	ID        uint           `json:"id" gorm:"primaryKey"`
+	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Title     string         `json:"title" gorm:"not null" validate:"nonzero"`
-	ArtistID  uint           `json:"artist_id" gorm:"not null"`
+	ArtistID  uuid.UUID      `json:"artist_id" gorm:"type:uuid;not null"`
 	Artist    Artist         `json:"artist" gorm:"foreignKey:ArtistID" validate:"-"`
 	File      string         `json:"file" gorm:"not null"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -35,7 +39,7 @@ func (Track) TableName() string {
 }
 
 type Artist struct {
-	ID        uint           `json:"id" gorm:"primaryKey"`
+	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Name      string         `json:"name" gorm:"uniqueIndex;not null" validate:"nonzero"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

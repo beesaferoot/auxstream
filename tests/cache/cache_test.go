@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,7 @@ func TestGetKey(t *testing.T) {
 	}
 	r := cache.NewRedis(opts)
 
-	m1 := &db.Artist{Name: "Test", ID: 1, CreatedAt: time.Now()}
+	m1 := &db.Artist{Name: "Test", ID: uuid.New(), CreatedAt: time.Now()}
 	object := &cache.Cacheable[db.Artist]{Value: m1}
 	err := r.Get("artist-1", object)
 
@@ -44,7 +45,7 @@ func TestSetKey(t *testing.T) {
 	}
 	r := cache.NewRedis(opts)
 
-	m1 := &db.Artist{Name: "Test", ID: 1, CreatedAt: time.Now()}
+	m1 := &db.Artist{Name: "Test", ID: uuid.New(), CreatedAt: time.Now()}
 
 	err := r.Set("artist-1", &cache.Cacheable[db.Artist]{Value: m1}, 1*time.Millisecond)
 	require.NoError(t, err)
@@ -61,7 +62,7 @@ func TestDeleteKey(t *testing.T) {
 		Addr: mr.Addr(),
 	}
 	r := cache.NewRedis(opts)
-	m1 := &db.Artist{Name: "Test", ID: 1, CreatedAt: time.Now()}
+	m1 := &db.Artist{Name: "Test", ID: uuid.New(), CreatedAt: time.Now()}
 	err := r.Set("artist-1", &cache.Cacheable[db.Artist]{Value: m1}, 1*time.Millisecond)
 	require.NoError(t, err)
 

@@ -1,15 +1,15 @@
 package http
 
 import (
+	"auxstream/internal/auth"
 	"auxstream/internal/cache"
 	"auxstream/internal/db"
 	"auxstream/internal/http/handlers"
-	"auxstream/utils"
+	"auxstream/config"
 	"context"
+	"time"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -22,20 +22,50 @@ type Server interface {
 type ServerConfig struct {
 	DB    *gorm.DB
 	Cache cache.Cache
-	Conf  utils.Config
+	Conf  config.Config
 }
 
 type server struct {
-	db    *gorm.DB
-	cache cache.Cache
-	conf  utils.Config
+	db          *gorm.DB
+	cache       cache.Cache
+	conf        config.Config
+	jwtService  *auth.JWTService
+	authService *handlers.AuthService
 }
 
 func NewServer(serverConfig ServerConfig) Server {
+	// Initialize JWT service
+	jwtService := auth.NewJWTService(
+		serverConfig.Conf.JWTSecret,
+		time.Hour,      // Access token TTL
+		24*time.Hour*7, // Refresh token TTL (7 days)
+	)
+
+	// Initialize refresh token service
+	refreshService := auth.NewRefreshTokenService(serverConfig.Cache, jwtService)
+
+	// Initialize OAuth service
+	oauthService := auth.NewOAuthService(
+		serverConfig.Conf.GoogleClientID,
+		serverConfig.Conf.GoogleClientSecret,
+		serverConfig.Conf.GoogleRedirectURL,
+		db.NewUserRepo(serverConfig.DB),
+	)
+
+	// Initialize auth service
+	authService := handlers.NewAuthService(
+		db.NewUserRepo(serverConfig.DB),
+		jwtService,
+		refreshService,
+		oauthService,
+	)
+
 	return &server{
-		db:    serverConfig.DB,
-		cache: serverConfig.Cache,
-		conf:  serverConfig.Conf,
+		db:          serverConfig.DB,
+		cache:       serverConfig.Cache,
+		conf:        serverConfig.Conf,
+		jwtService:  jwtService,
+		authService: authService,
 	}
 }
 
@@ -69,12 +99,11 @@ func (s *server) setupRouter() *gin.Engine {
 
 	r.MaxMultipartMemory = 5 << 20 // 5 miB
 
-	sessionSecret := []byte(s.conf.SessionString)
 	// Allow cors origin
 	config := cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
 		AllowMethods:     []string{"PUT", "PATCH", "POST", "GET", "OPTIONS", "DELETE"},
-		AllowHeaders:     []string{"Origin", "Content-Type"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 	})
@@ -82,21 +111,22 @@ func (s *server) setupRouter() *gin.Engine {
 	r.Use(injectCache(s.cache))
 	v1 := r.Group("/api/v1")
 
-	// Set up the cookie store for session management
-	v1.Use(sessions.Sessions("usersession", cookie.NewStore(sessionSecret)))
+	// Note: Session management removed - using JWT tokens instead
 
-	// POST routes
-	v1.POST("/upload_track", handlers.CookieAuthMiddleware, func(c *gin.Context) {
+	// Authentication routes
+	v1.POST("/register", s.authService.Register)
+	v1.POST("/login", s.authService.Login)
+	v1.POST("/refresh", s.authService.RefreshToken)
+	v1.POST("/logout", s.authService.Logout)
+	v1.GET("/auth/google", s.authService.GoogleAuth)
+	v1.GET("/auth/google/callback", s.authService.GoogleCallback)
+
+	// Protected routes
+	v1.POST("/upload_track", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 		handlers.AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
 	})
-	v1.POST("/upload_batch_track", handlers.CookieAuthMiddleware, func(c *gin.Context) {
+	v1.POST("/upload_batch_track", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 		handlers.BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
-	})
-	v1.POST("/login", func(c *gin.Context) {
-		handlers.Login(c, db.NewUserRepo(s.db))
-	})
-	v1.POST("/signup", func(c *gin.Context) {
-		handlers.Signup(c, db.NewUserRepo(s.db))
 	})
 
 	// GET routes
@@ -105,9 +135,6 @@ func (s *server) setupRouter() *gin.Engine {
 	})
 	v1.GET("/search", func(c *gin.Context) {
 		handlers.FetchTracksByArtistHandler(c, db.NewTrackRepo(s.db))
-	})
-	v1.GET("/logout", func(c *gin.Context) {
-		handlers.Logout(c)
 	})
 	v1.Static("/serve", "./uploads")
 

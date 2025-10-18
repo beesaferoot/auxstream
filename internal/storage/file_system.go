@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"auxstream/utils"
+	"auxstream/config"
 	"io"
 )
 
@@ -22,7 +22,7 @@ type File interface {
 	io.ReadWriter
 }
 
-func SetFileStore(config utils.Config) error {
+func SetFileStore(config config.Config) error {
 
 	if config.FileStore == "s3" && config.S3bucket != "" {
 		Store = NewS3Store(config.S3bucket)

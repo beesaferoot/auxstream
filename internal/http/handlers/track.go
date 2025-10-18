@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -60,7 +62,7 @@ func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 
 type AddTrackForm struct {
 	Title    string                `form:"title" binding:"required"`
-	ArtistId int                   `form:"artist_id" binding:"required"`
+	ArtistId uuid.UUID             `form:"artist_id" binding:"required"`
 	Audio    *multipart.FileHeader `form:"audio" binding:"required"`
 }
 
@@ -74,6 +76,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 
 	trackTittle := reqForm.Title
 	trackArtistId := reqForm.ArtistId
+
 	file := reqForm.Audio
 
 	if file.Size <= 0 {
@@ -99,7 +102,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		return
 	}
 
-	artist := &db.Artist{ID: uint(trackArtistId)}
+	artist := &db.Artist{ID: trackArtistId}
 
 	ctx := c.Request.Context()
 	cacheClient, ok := ctx.Value("cacheClient").(cache.Cache)
@@ -116,7 +119,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 
 	// artist should point to a value from cache if cache hit was successful
 	if artist.Name == "" {
-		artist, err = artistRepo.GetArtistById(c, uint(trackArtistId))
+		artist, err = artistRepo.GetArtistById(c, trackArtistId)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, errorResponse(fmt.Sprintf("artist with id (%d) does not exists: %s", trackArtistId, err.Error())))
 			return
@@ -139,7 +142,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 type BulkTrackUploadForm struct {
 	Titles   []string                `form:"track_titles" binding:"required"`
 	Files    []*multipart.FileHeader `form:"track_files" binding:"required"`
-	ArtistId int                     `form:"artist_id" binding:"required"`
+	ArtistId uuid.UUID                     `form:"artist_id" binding:"required"`
 }
 
 // BulkTrackUploadHandler enables bulk track uploads
@@ -167,7 +170,7 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 			filteredFileNames = append(filteredFileNames, fileName)
 		}
 	}
-	rows, err := r.BulkCreateTracks(c, trackTitles, uint(reqForm.ArtistId), filteredFileNames)
+	rows, err := r.BulkCreateTracks(c, trackTitles, reqForm.ArtistId, filteredFileNames)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
