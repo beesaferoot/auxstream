@@ -3,6 +3,7 @@ package auth
 import (
 	"auxstream/internal/cache"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -22,14 +23,11 @@ type RefreshTokenData struct {
 }
 
 func (r *RefreshTokenData) MarshalBinary() ([]byte, error) {
-	return []byte(fmt.Sprintf(`{"user_id":"%s","token_id":"%s","expires_at":"%s"}`,
-		r.UserID.String(), r.TokenID, r.ExpiresAt.Format(time.RFC3339))), nil
+	return json.Marshal(r)
 }
 
 func (r *RefreshTokenData) UnmarshalBinary(data []byte) error {
-	// Simple JSON unmarshaling for the refresh token data
-	// In a production app, you'd want to use proper JSON marshaling
-	return nil
+	return json.Unmarshal(data, r)
 }
 
 func NewRefreshTokenService(cache cache.Cache, jwtService *JWTService) *RefreshTokenService {
@@ -39,6 +37,7 @@ func NewRefreshTokenService(cache cache.Cache, jwtService *JWTService) *RefreshT
 	}
 }
 
+// StoreRefreshToken saves the refresh token with TTL matching its expiry.
 func (r *RefreshTokenService) StoreRefreshToken(ctx context.Context, userID uuid.UUID, tokenID string, expiresAt time.Time) error {
 	key := fmt.Sprintf("refresh_token:%s", tokenID)
 	refreshData := &RefreshTokenData{
@@ -48,9 +47,21 @@ func (r *RefreshTokenService) StoreRefreshToken(ctx context.Context, userID uuid
 	}
 
 	ttl := time.Until(expiresAt)
-	return r.cache.Set(key, refreshData, ttl)
+	if ttl <= 0 {
+		return errors.New("invalid expiration time for refresh token")
+	}
+
+	// Save token data
+	if err := r.cache.Set(key, refreshData, ttl); err != nil {
+		return fmt.Errorf("failed to store refresh token: %w", err)
+	}
+
+	// Track token under the user's list for easy revocation
+	userKey := fmt.Sprintf("user_tokens:%s", userID.String())
+	return r.cache.SAdd(ctx, userKey, tokenID)
 }
 
+// ValidateRefreshToken checks if the token is valid and not expired.
 func (r *RefreshTokenService) ValidateRefreshToken(ctx context.Context, tokenID string) (*RefreshTokenData, error) {
 	key := fmt.Sprintf("refresh_token:%s", tokenID)
 
@@ -62,47 +73,54 @@ func (r *RefreshTokenService) ValidateRefreshToken(ctx context.Context, tokenID 
 
 	if time.Now().After(refreshData.ExpiresAt) {
 		// Clean up expired token
-		r.cache.Del(key)
+		_ = r.cache.Del(key)
 		return nil, errors.New("refresh token expired")
 	}
 
 	return &refreshData, nil
 }
 
+// RevokeRefreshToken deletes a specific refresh token from the cache.
 func (r *RefreshTokenService) RevokeRefreshToken(ctx context.Context, tokenID string) error {
 	key := fmt.Sprintf("refresh_token:%s", tokenID)
 	return r.cache.Del(key)
 }
 
+// RevokeAllUserTokens removes all refresh tokens for a user.
 func (r *RefreshTokenService) RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error {
-	// This is a simplified implementation
-	// In a production app, you'd want to maintain a list of active tokens per user
-	// or use Redis sets/lists to track tokens by user ID
 	userKey := fmt.Sprintf("user_tokens:%s", userID.String())
 
-	// Get all tokens for this user and revoke them
-	// This is a placeholder - you'd need to implement token tracking
-	_ = userKey
-	return nil
+	tokenIDs, err := r.cache.SMembers(ctx, userKey)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve user tokens: %w", err)
+	}
+
+	for _, tokenID := range tokenIDs {
+		_ = r.cache.Del(fmt.Sprintf("refresh_token:%s", tokenID))
+	}
+
+	// Delete the user's token tracking key
+	return r.cache.Del(userKey)
 }
 
+// GenerateAndStoreRefreshToken creates a new refresh token and stores it in the cache.
 func (r *RefreshTokenService) GenerateAndStoreRefreshToken(ctx context.Context, userID uuid.UUID) (string, error) {
 	// Generate a new refresh token
 	tokenString, err := r.jwtService.GenerateRefreshToken(userID)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Extract token ID from the JWT claims
+	// Validate token to extract claims (ID, Expiry)
 	claims, err := r.jwtService.ValidateRefreshToken(tokenString)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to validate refresh token: %w", err)
 	}
 
-	// Store the refresh token in Redis
+	// Store the refresh token in cache
 	err = r.StoreRefreshToken(ctx, userID, claims.ID, claims.ExpiresAt.Time)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
 	return tokenString, nil

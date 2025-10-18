@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -34,6 +35,18 @@ type Cache interface {
 	Get(key string, value Unmarshable) error
 	GetString(key string) (string, error)
 	Del(key string) error
+	Exists(ctx context.Context, key string) (bool, error)
+	Expire(ctx context.Context, key string, exp time.Duration) error
+	TTL(ctx context.Context, key string) (time.Duration, error)
+
+	// Collection helpers
+	SAdd(ctx context.Context, key string, members ...string) error
+	SMembers(ctx context.Context, key string) ([]string, error)
+	SRem(ctx context.Context, key string, members ...string) error
+
+	// Numeric helpers
+	Incr(ctx context.Context, key string) (int64, error)
+	Decr(ctx context.Context, key string) (int64, error)
 }
 
 type Redis struct {
@@ -84,4 +97,48 @@ func (r *Redis) GetString(key string) (string, error) {
 
 func (r *Redis) Del(key string) error {
 	return r.client.Del(context.Background(), key).Err()
+}
+
+func (r *Redis) Exists(ctx context.Context, key string) (bool, error) {
+	count, err := r.client.Exists(ctx, key).Result()
+	return count > 0, err
+}
+
+func (r *Redis) Expire(ctx context.Context, key string, exp time.Duration) error {
+	return r.client.Expire(ctx, key, exp).Err()
+}
+
+func (r *Redis) TTL(ctx context.Context, key string) (time.Duration, error) {
+	return r.client.TTL(ctx, key).Result()
+}
+
+func (r *Redis) SAdd(ctx context.Context, key string, members ...string) error {
+	if len(members) == 0 {
+		return errors.New("SAdd requires at least one member")
+	}
+	interfaceMembers := make([]interface{}, len(members))
+	for i, v := range members {
+		interfaceMembers[i] = v
+	}
+	return r.client.SAdd(ctx, key, interfaceMembers...).Err()
+}
+
+func (r *Redis) SMembers(ctx context.Context, key string) ([]string, error) {
+	return r.client.SMembers(ctx, key).Result()
+}
+
+func (r *Redis) SRem(ctx context.Context, key string, members ...string) error {
+	interfaceMembers := make([]interface{}, len(members))
+	for i, v := range members {
+		interfaceMembers[i] = v
+	}
+	return r.client.SRem(ctx, key, interfaceMembers...).Err()
+}
+
+func (r *Redis) Incr(ctx context.Context, key string) (int64, error) {
+	return r.client.Incr(ctx, key).Result()
+}
+
+func (r *Redis) Decr(ctx context.Context, key string) (int64, error) {
+	return r.client.Decr(ctx, key).Result()
 }
