@@ -1,7 +1,7 @@
-package api
+package handlers
 
 import (
-	"auxstream/db"
+	"auxstream/internal/db"
 	"log"
 	"net/http"
 

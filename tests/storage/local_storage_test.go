@@ -1,7 +1,7 @@
 package tests
 
 import (
-	store "auxstream/file_system"
+	store "auxstream/internal/storage"
 	"os"
 	"testing"
 

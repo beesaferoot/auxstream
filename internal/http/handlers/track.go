@@ -1,9 +1,9 @@
-package api
+package handlers
 
 import (
-	"auxstream/cache"
-	"auxstream/db"
-	fs "auxstream/file_system"
+	"auxstream/internal/cache"
+	"auxstream/internal/db"
+	fs "auxstream/internal/storage"
 	"fmt"
 	"log"
 	"mime/multipart"

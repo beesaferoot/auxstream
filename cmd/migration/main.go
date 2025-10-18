@@ -1,7 +1,8 @@
 package main
 
 import (
-	"auxstream/db"
+	"auxstream/internal/db"
+
 	"github.com/beesaferoot/gorm-schema/migration"
 	"github.com/beesaferoot/gorm-schema/migration/commands"
 
@@ -11,8 +12,8 @@ import (
 
 type DBModelRegistry struct{}
 
-func (r *DBModelRegistry) GetModels() map[string]any{
-	return db.ModelTypeRegistry 
+func (r *DBModelRegistry) GetModels() map[string]any {
+	return db.ModelTypeRegistry
 }
 
 func init() {

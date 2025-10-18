@@ -1,9 +1,9 @@
 package tests
 
 import (
-	"auxstream/api"
-	"auxstream/cache"
-	fs "auxstream/file_system"
+	"auxstream/internal/cache"
+	"auxstream/internal/http"
+	fs "auxstream/internal/storage"
 	"database/sql"
 	"fmt"
 	"log"
@@ -54,7 +54,7 @@ func setupTest(_ *testing.T) func(t *testing.T) {
 		Addr: mr.Addr(),
 	}
 	r := cache.NewRedis(opts)
-	server := api.NewMockServer(gormDB, r)
+	server := http.NewMockServer(gormDB, r)
 	router = server.SetupRouter(true)
 
 	return tearDownTest

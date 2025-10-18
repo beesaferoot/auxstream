@@ -1,8 +1,9 @@
-package api
+package http
 
 import (
-	"auxstream/cache"
-	"auxstream/db"
+	"auxstream/internal/cache"
+	"auxstream/internal/db"
+	"auxstream/internal/http/handlers"
 	"auxstream/utils"
 	"context"
 
@@ -85,28 +86,28 @@ func (s *server) setupRouter() *gin.Engine {
 	v1.Use(sessions.Sessions("usersession", cookie.NewStore(sessionSecret)))
 
 	// POST routes
-	v1.POST("/upload_track", CookieAuthMiddleware, func(c *gin.Context) {
-		AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
+	v1.POST("/upload_track", handlers.CookieAuthMiddleware, func(c *gin.Context) {
+		handlers.AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
 	})
-	v1.POST("/upload_batch_track", CookieAuthMiddleware, func(c *gin.Context) {
-		BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
+	v1.POST("/upload_batch_track", handlers.CookieAuthMiddleware, func(c *gin.Context) {
+		handlers.BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
 	})
 	v1.POST("/login", func(c *gin.Context) {
-		Login(c, db.NewUserRepo(s.db))
+		handlers.Login(c, db.NewUserRepo(s.db))
 	})
 	v1.POST("/signup", func(c *gin.Context) {
-		Signup(c, db.NewUserRepo(s.db))
+		handlers.Signup(c, db.NewUserRepo(s.db))
 	})
 
 	// GET routes
 	v1.GET("/tracks", func(c *gin.Context) {
-		FetchTracksHandler(c, db.NewTrackRepo(s.db))
+		handlers.FetchTracksHandler(c, db.NewTrackRepo(s.db))
 	})
 	v1.GET("/search", func(c *gin.Context) {
-		FetchTracksByArtistHandler(c, db.NewTrackRepo(s.db))
+		handlers.FetchTracksByArtistHandler(c, db.NewTrackRepo(s.db))
 	})
 	v1.GET("/logout", func(c *gin.Context) {
-		Logout(c)
+		handlers.Logout(c)
 	})
 	v1.Static("/serve", "./uploads")
 
@@ -117,16 +118,16 @@ func (s *server) setupMockRouter() *gin.Engine {
 	r := gin.Default()
 	r.Use(injectCache(s.cache))
 	r.POST("/upload_track", func(c *gin.Context) {
-		AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
+		handlers.AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
 	})
 	r.POST("/upload_batch_track", func(c *gin.Context) {
-		BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
+		handlers.BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
 	})
 	r.GET("/tracks", func(c *gin.Context) {
-		FetchTracksHandler(c, db.NewTrackRepo(s.db))
+		handlers.FetchTracksHandler(c, db.NewTrackRepo(s.db))
 	})
 	r.GET("/search", func(c *gin.Context) {
-		FetchTracksByArtistHandler(c, db.NewTrackRepo(s.db))
+		handlers.FetchTracksByArtistHandler(c, db.NewTrackRepo(s.db))
 	})
 
 	return r

@@ -1,9 +1,10 @@
 package tests
 
 import (
-	store "auxstream/file_system"
-	"github.com/stretchr/testify/require"
+	store "auxstream/internal/storage"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreates3Store(t *testing.T) {

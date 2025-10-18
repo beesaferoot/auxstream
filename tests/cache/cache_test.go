@@ -1,13 +1,14 @@
 package tests
 
 import (
-	"auxstream/cache"
-	"auxstream/db"
+	"auxstream/internal/cache"
+	"auxstream/internal/db"
+	"testing"
+	"time"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func TestGetKey(t *testing.T) {

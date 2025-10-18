@@ -1,10 +1,10 @@
 package main
 
 import (
-	"auxstream/api"
-	"auxstream/cache"
-	"auxstream/db"
-	fs "auxstream/file_system"
+	"auxstream/internal/cache"
+	"auxstream/internal/db"
+	"auxstream/internal/http"
+	fs "auxstream/internal/storage"
 	"auxstream/utils"
 	"context"
 	"log"
@@ -34,7 +34,7 @@ func main() {
 		log.Fatalf("failed set file store: %s", err.Error())
 	}
 
-	server := api.NewServer(api.ServerConfig{
+	server := http.NewServer(http.ServerConfig{
 		Cache: rc,
 		DB:    database,
 		Conf:  config,
