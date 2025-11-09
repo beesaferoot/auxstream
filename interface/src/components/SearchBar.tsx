@@ -11,7 +11,7 @@ import {
   InputLeftElement,
 } from "@chakra-ui/react"
 import { useEventListener } from "@chakra-ui/hooks"
-import { SearchIcon } from "@chakra-ui/icons"
+import { IoSearch } from "react-icons/io5"
 
 function SearchBar() {
   const { isOpen, onOpen, onClose } = useDisclosure()
@@ -39,7 +39,7 @@ function SearchBar() {
       <InputGroup>
         <InputLeftElement
           pointerEvents="none"
-          children={<SearchIcon color="gray.500" />}
+          children={<IoSearch color="gray.500" />}
         />
         <Input
           ref={inputRef}
@@ -60,7 +60,7 @@ function SearchBar() {
             <InputGroup>
               <InputLeftElement
                 pointerEvents="none"
-                children={<SearchIcon color="gray.500" />}
+                children={<IoSearch color="gray.500" />}
               />
               <Input
                 placeholder="Search tracks"
