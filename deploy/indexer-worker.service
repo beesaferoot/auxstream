@@ -1,0 +1,30 @@
+[Unit]
+Description=AuxStream Metadata Indexer Worker
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=auxstream
+WorkingDirectory=/home/beesafe/apps/auxstream
+ExecStart=/home/beesafe/apps/auxstream/build/index_worker -interval 24
+Restart=on-failure
+RestartSec=10s
+
+# Environment
+Environment="GIN_MODE=release"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=auxstream-indexer
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/beesafe/apps/auxstream/uploads
+
+[Install]
+WantedBy=multi-user.target
+
