@@ -27,6 +27,17 @@ run:
 
 
 build:
-	go build -o build/auxstream
+	go build -o build/auxstream cmd/server/main.go
 
-.PHONY: test run createdb setup-db teardown-db rollback-db init-migration-schema migration-history migration-status
+build-worker:
+	go build -o build/index_worker cmd/workers/index_worker.go
+
+build-all: build build-worker
+
+run-worker:
+	./build/index_worker -interval 24
+
+run-worker-once:
+	./build/index_worker -once
+
+.PHONY: test run createdb setup-db teardown-db rollback-db init-migration-schema migration-history migration-status build build-worker build-all run-worker run-worker-once
