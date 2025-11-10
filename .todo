@@ -4,16 +4,16 @@ Backend check list
 [+] implement /search endpoint
 [+] implement /upload_batch_track endpoint
 [+] add some auth protection on /upload_batch_track endpoint
-[-] serve audio files (stream from client)
+[+] serve audio files (stream from client)
 [-] support downloading
 [+] setup upload to cloudinary
 [+] limit audio upload size (5mb max)
 [+] allow only mp3 file upload
-[-] create endpoint to partially update an artist record
+[+] create endpoint to partially update an artist record
 
 UI check list
 [+] search interface
 [+] audio pane display
-[-] audio player interface
-[-] auth pages (sign/signup)
+[+] audio player interface
+[+] auth pages (sign/signup)
 [+] audio upload dashboard (admin)
