@@ -28,7 +28,6 @@ func NewAuthService(userRepo db.UserRepo, jwtService *auth.JWTService, refreshSe
 }
 
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
 }
@@ -74,10 +73,10 @@ func (a *AuthService) Register(c *gin.Context) {
 
 	// Create user
 	user := &db.User{
-		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: hashedPassword,
 		Provider:     "local",
+		ID:           uuid.New(),
 	}
 
 	createdUser, err := a.userRepo.CreateUser(c.Request.Context(), user)
@@ -88,7 +87,7 @@ func (a *AuthService) Register(c *gin.Context) {
 	}
 
 	// Generate tokens
-	accessToken, err := a.jwtService.GenerateAccessToken(createdUser.ID, createdUser.Username, createdUser.Email)
+	accessToken, err := a.jwtService.GenerateAccessToken(createdUser.ID, createdUser.Email)
 	if err != nil {
 		log.Printf("GenerateAccessToken error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
@@ -137,7 +136,7 @@ func (a *AuthService) Login(c *gin.Context) {
 	}
 
 	// Generate tokens
-	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Username, user.Email)
+	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Email)
 	if err != nil {
 		log.Printf("GenerateAccessToken error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
@@ -200,7 +199,7 @@ func (a *AuthService) RefreshToken(c *gin.Context) {
 	}
 
 	// Generate new access token
-	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Username, user.Email)
+	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Email)
 	if err != nil {
 		log.Printf("GenerateAccessToken error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
@@ -294,7 +293,7 @@ func (a *AuthService) GoogleCallback(c *gin.Context) {
 	}
 
 	// Generate tokens
-	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Username, user.Email)
+	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Email)
 	if err != nil {
 		log.Printf("GenerateAccessToken error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})

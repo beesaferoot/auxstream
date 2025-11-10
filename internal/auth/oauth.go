@@ -90,7 +90,6 @@ func (o *OAuthService) FindOrCreateUser(ctx context.Context, googleUser *GoogleU
 
 	// Create new user
 	newUser := &db.User{
-		Username:  googleUser.Name,
 		Email:     googleUser.Email,
 		GoogleID:  googleUser.ID,
 		Provider:  "google",

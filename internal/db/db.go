@@ -3,6 +3,7 @@ package db
 import (
 	"auxstream/config"
 	"context"
+	"github.com/go-playground/validator/v10"
 	"log"
 	"os"
 
@@ -10,6 +11,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+var validate = validator.New()
 
 // InitDB initializes a GORM database connection with pgx driver
 func InitDB(config config.Config, ctx context.Context) *gorm.DB {
@@ -38,7 +41,7 @@ func InitDB(config config.Config, ctx context.Context) *gorm.DB {
 	// Configure connection pool
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
-	
+
 	return db
 }
 

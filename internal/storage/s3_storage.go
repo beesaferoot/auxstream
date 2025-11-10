@@ -92,20 +92,20 @@ func (s3 *S3Store) Read(location string) (file File, err error) {
 	return
 }
 
-func (s3 *S3Store) BulkSave(buf chan<- string, listOfRaw [][]byte) {
+func (s3 *S3Store) BulkSave(buf chan<- FileMeta, listOfFileMeta []FileMeta) {
 	var wg sync.WaitGroup
-	for _, raw := range listOfRaw {
+	for _, fd := range listOfFileMeta {
 		wg.Add(1)
-		go func(raw []byte) {
+		go func(raw []byte, title string) {
 			defer wg.Done()
 			fileName, err := s3.Save(raw)
 			if err != nil {
 				log.Println(err)
-				buf <- ""
+				buf <- FileMeta{AudioTitle: title}
 				return
 			}
-			buf <- fileName
-		}(raw)
+			buf <- FileMeta{Name: fileName, Content: raw, AudioTitle: title}
+		}(fd.Content, fd.AudioTitle)
 	}
 	wg.Wait()
 	close(buf)

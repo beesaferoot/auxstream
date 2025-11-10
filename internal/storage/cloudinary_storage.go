@@ -94,20 +94,20 @@ func (cld *CloudinaryStore) Read(locationUrl string) (file File, err error) {
 	return file, nil
 }
 
-func (cld *CloudinaryStore) BulkSave(buf chan<- string, listOfRaw [][]byte) {
+func (cld *CloudinaryStore) BulkSave(buf chan<- FileMeta, listOfFileMeta []FileMeta) {
 	var wg sync.WaitGroup
-	for _, raw := range listOfRaw {
+	for _, fd := range listOfFileMeta {
 		wg.Add(1)
-		go func(raw []byte) {
+		go func(raw []byte, title string) {
 			defer wg.Done()
 			fileUrl, err := cld.Save(raw)
 			if err != nil {
 				log.Printf("bulk save error: %s", err.Error())
-				buf <- ""
+				buf <- FileMeta{AudioTitle: title}
 				return
 			}
-			buf <- fileUrl
-		}(raw)
+			buf <- FileMeta{Name: fileUrl, Content: raw, AudioTitle: title}
+		}(fd.Content, fd.AudioTitle)
 	}
 	wg.Wait()
 	close(buf)

@@ -5,13 +5,19 @@ import (
 	"io"
 )
 
+type FileMeta struct {
+	Name       string
+	AudioTitle string
+	Content    []byte
+}
+
 // FileSystem A generic interface for file storage operations
 type FileSystem interface {
 	Save(raw []byte) (filename string, err error)
 	Read(fileName string) (file File, err error)
 	Reads() int
 	Writes() int
-	BulkSave(buf chan<- string, listOfRaw [][]byte)
+	BulkSave(buf chan<- FileMeta, listOfFileMeta []FileMeta)
 	Remove(fileName string) error
 }
 

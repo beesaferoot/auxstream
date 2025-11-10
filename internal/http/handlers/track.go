@@ -16,6 +16,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetTrackByIDHandler fetches a single track by ID
+func GetTrackByIDHandler(c *gin.Context, r db.TrackRepo) {
+	trackIdStr := c.Param("id")
+	trackId, err := uuid.Parse(trackIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse("invalid track ID format"))
+		return
+	}
+
+	track, err := r.GetTrackByID(c, trackId)
+	if err != nil {
+		c.JSON(http.StatusNotFound, errorResponse("track not found"))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": track,
+	})
+}
+
 // FetchTracksByArtistHandler fetch tracks by artist (limit results < 100)
 func FetchTracksByArtistHandler(c *gin.Context, r db.TrackRepo) {
 	artist := c.Query("artist")
@@ -32,11 +52,13 @@ func FetchTracksByArtistHandler(c *gin.Context, r db.TrackRepo) {
 }
 
 type FetchTrackQueryParams struct {
-	PageSize int `form:"pagesize" binding:"gte=0"`
-	PageNum  int `form:"pagenumber" binding:"gte=1"`
+	PageSize int    `form:"pagesize" binding:"gte=0"`
+	PageNum  int    `form:"pagenumber" binding:"gte=1"`
+	Sort     string `form:"sort"` // "trending", "recent", or default
+	Days     int    `form:"days"` // For trending within last N days (0 = all time)
 }
 
-// FetchTracksHandler fetch paginated tracks with limit on page size
+// FetchTracksHandler fetch paginated tracks with limit on page size and sorting options
 func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 	var reqParams FetchTrackQueryParams
 
@@ -48,7 +70,24 @@ func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 	limit := reqParams.PageSize
 	offset := (reqParams.PageNum - 1) * reqParams.PageSize
 
-	tracks, err := r.GetTracks(c, limit, offset)
+	var tracks []*db.Track
+	var err error
+
+	// Choose sorting method based on query parameter
+	switch reqParams.Sort {
+	case "trending":
+		days := reqParams.Days
+		if days == 0 {
+			days = 30 // Default to last 30 days for trending
+		}
+		tracks, err = r.GetTrendingTracks(c, limit, offset, days)
+	case "recent":
+		tracks, err = r.GetRecentTracks(c, limit, offset)
+	default:
+		// Default behavior - just get tracks (no special sorting)
+		tracks, err = r.GetTracks(c, limit, offset)
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
 		return
@@ -61,9 +100,11 @@ func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 }
 
 type AddTrackForm struct {
-	Title    string                `form:"title" binding:"required"`
-	ArtistId uuid.UUID             `form:"artist_id" binding:"required"`
-	Audio    *multipart.FileHeader `form:"audio" binding:"required"`
+	Title     string                `form:"title" binding:"required"`
+	ArtistId  uuid.UUID             `form:"artist_id" binding:"required"`
+	Audio     *multipart.FileHeader `form:"audio" binding:"required"`
+	Duration  int                   `form:"duration"`  // Optional: duration in seconds
+	Thumbnail string                `form:"thumbnail"` // Optional: thumbnail URL or path
 }
 
 // AddTrackHandler add track to the system
@@ -95,7 +136,10 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		return
 	}
 	raw_bytes := make([]byte, file.Size)
-	_, err = raw_file.Read(raw_bytes)
+	if _, readErr := raw_file.Read(raw_bytes); readErr != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unable to read track audio"))
+		return
+	}
 	filePath, err := fs.Store.Save(raw_bytes)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(store) audio upload failed: %s", err.Error())))
@@ -110,7 +154,7 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 	artistCacheKey := "artist-id-" + fmt.Sprintf("%d", trackArtistId)
 	// cache client exists
 	if ok {
-		err = cacheClient.Get(artistCacheKey, &cache.Cacheable[db.Artist]{Value: artist})
+		err = cacheClient.Get(artistCacheKey, artist)
 		if err != nil {
 			log.Printf("(Get artist id from cache) failed: %s\n", err.Error())
 			err = nil
@@ -124,10 +168,10 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 			c.AbortWithStatusJSON(http.StatusNotFound, errorResponse(fmt.Sprintf("artist with id (%d) does not exists: %s", trackArtistId, err.Error())))
 			return
 		}
-		_ = cacheClient.Set(artistCacheKey, &cache.Cacheable[db.Artist]{Value: artist}, 10*time.Hour)
+		_ = cacheClient.Set(artistCacheKey, artist, 10*time.Hour)
 	}
 
-	track, err := r.CreateTrack(c, trackTittle, trackArtistId, filePath)
+	track, err := r.CreateTrack(c, trackTittle, trackArtistId, filePath, reqForm.Duration, reqForm.Thumbnail)
 	if err != nil {
 		fmt.Printf("Artist: %v\n", artist)
 		fmt.Printf("Error: %s\n", err.Error())
@@ -142,19 +186,26 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 type BulkTrackUploadForm struct {
 	Titles   []string                `form:"track_titles" binding:"required"`
 	Files    []*multipart.FileHeader `form:"track_files" binding:"required"`
-	ArtistId uuid.UUID                     `form:"artist_id" binding:"required"`
+	ArtistId string                  `form:"artist_id" binding:"required"`
 }
 
 // BulkTrackUploadHandler enables bulk track uploads
 func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 	var reqForm BulkTrackUploadForm
+	var artistId uuid.UUID
 
 	if err := c.ShouldBind(&reqForm); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 		return
 	}
 
-	fileNames, err := processFiles(reqForm.Files)
+	artistId, err := uuid.Parse(reqForm.ArtistId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse(fmt.Sprintf("invalid artist id: %s", reqForm.ArtistId)))
+		return
+	}
+
+	fileMetas, err := processFiles(reqForm.Files, reqForm.Titles)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
@@ -162,15 +213,15 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 	}
 
 	var trackTitles []string
-	var filteredFileNames []string
+	var filteredFileNames = map[string]string{}
 	// filter tracks that failed to upload
-	for idx, fileName := range fileNames {
-		if fileName != "" {
-			trackTitles = append(trackTitles, reqForm.Titles[idx])
-			filteredFileNames = append(filteredFileNames, fileName)
+	for title, fileMeta := range fileMetas {
+		if fileMeta.Name != "" {
+			trackTitles = append(trackTitles, title)
+			filteredFileNames[title] = fileMeta.Name
 		}
 	}
-	rows, err := r.BulkCreateTracks(c, trackTitles, reqForm.ArtistId, filteredFileNames)
+	rows, err := r.BulkCreateTracks(c, trackTitles, artistId, filteredFileNames)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
@@ -185,34 +236,77 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 	})
 }
 
-func processFiles(files []*multipart.FileHeader) (fileNames []string, err error) {
-	var groupfiles [][]byte
-
-	for _, file := range files {
-		raw_file, err := file.Open()
-		if err != nil {
-			err = nil
-			groupfiles = append(groupfiles, []byte{})
+func processFiles(files []*multipart.FileHeader, titles []string) (fileMeta map[string]fs.FileMeta, err error) {
+	var groupFiles []fs.FileMeta
+	var groupTitles = map[string]string{}
+	for idx, file := range files {
+		raw_file, fileErr := file.Open()
+		groupTitles[file.Filename] = titles[idx]
+		if fileErr != nil {
+			groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: []byte{}})
 			continue
 		}
 		raw_bytes := make([]byte, file.Size)
-		_, err = raw_file.Read(raw_bytes)
-		if err != nil {
-			err = nil
-			groupfiles = append(groupfiles, []byte{})
+		if _, readErr := raw_file.Read(raw_bytes); readErr != nil {
+			groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: []byte{}})
 			continue
 		}
-		groupfiles = append(groupfiles, raw_bytes)
+		groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: raw_bytes[:file.Size]})
 	}
 
-	buf_channel := make(chan string, len(groupfiles))
+	buf_channel := make(chan fs.FileMeta, len(groupFiles))
 
 	// concurrently write files to disk
-	fs.Store.BulkSave(buf_channel, groupfiles)
+	fs.Store.BulkSave(buf_channel, groupFiles)
 
-	for fileName := range buf_channel {
-		fileNames = append(fileNames, fileName)
+	fileMeta = map[string]fs.FileMeta{}
+	for fmeta := range buf_channel {
+		if fmeta.Name != "" {
+			fileMeta[groupTitles[fmeta.AudioTitle]] = fmeta
+		}
 	}
 
 	return
+}
+
+type TrackPlayRequest struct {
+	TrackID        string `json:"track_id" binding:"required"`
+	DurationPlayed int    `json:"duration_played"` // Optional: how long the user listened (seconds)
+}
+
+// TrackPlayHandler records a track play/listen event
+func TrackPlayHandler(c *gin.Context, r db.TrackRepo) {
+	var req TrackPlayRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
+		return
+	}
+
+	trackId, err := uuid.Parse(req.TrackID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse("invalid track ID"))
+		return
+	}
+
+	// Increment the track's play count
+	if err := r.IncrementPlayCount(c, trackId); err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse("failed to record play"))
+		return
+	}
+
+	// Optionally record in playback history if user is authenticated
+	userIdValue, exists := c.Get("user_id")
+	if exists {
+		if userId, ok := userIdValue.(uuid.UUID); ok {
+			duration := req.DurationPlayed
+			if duration == 0 {
+				duration = 30 // Default minimum listening time
+			}
+			_ = r.RecordPlayback(c, userId, trackId, duration)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "play recorded",
+	})
 }

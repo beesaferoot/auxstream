@@ -18,6 +18,8 @@ type Config struct {
 	GoogleClientID     string `mapstructure:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret string `mapstructure:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL  string `mapstructure:"GOOGLE_REDIRECT_URL"`
+	YouTubeAPIKey      string `mapstructure:"YOUTUBE_API_KEY"`
+	SoundCloudClientID string `mapstructure:"SOUNDCLOUD_CLIENT_ID"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
@@ -33,6 +35,8 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("GOOGLE_CLIENT_ID", "")
 	viper.SetDefault("GOOGLE_CLIENT_SECRET", "")
 	viper.SetDefault("GOOGLE_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback")
+	viper.SetDefault("YOUTUBE_API_KEY", "")
+	viper.SetDefault("SOUNDCLOUD_CLIENT_ID", "")
 
 	err = viper.ReadInConfig()
 	if err != nil {

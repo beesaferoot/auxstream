@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"gopkg.in/validator.v2"
 	"gorm.io/gorm"
 )
 
@@ -28,7 +27,7 @@ func NewUserRepo(db *gorm.DB) UserRepo {
 }
 
 func (r *userRepo) CreateUser(ctx context.Context, user *User) (*User, error) {
-	if err := validator.Validate(user); err != nil {
+	if err := validate.Struct(user); err != nil {
 		return nil, err
 	}
 

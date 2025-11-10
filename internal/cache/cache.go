@@ -9,30 +9,30 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type Cacheable[T any] struct {
-	Value *T
-}
+// type Cacheable[T any] struct {
+// 	Value *T
+// }
 
-func (c *Cacheable[T]) MarshalBinary() ([]byte, error) {
-	return json.Marshal(c.Value)
-}
+// func (c *Cacheable[T]) MarshalBinary() ([]byte, error) {
+// 	return json.Marshal(c.Value)
+// }
 
-func (c *Cacheable[T]) UnmarshalBinary(data []byte) error {
-	return json.Unmarshal(data, &c.Value)
-}
+// func (c *Cacheable[T]) UnmarshalBinary(data []byte) error {
+// 	return json.Unmarshal(data, &c.Value)
+// }
 
-type Unmarshable interface {
-	UnmarshalBinary(data []byte) error
-}
+// type Unmarshable interface {
+// 	UnmarshalBinary(data []byte) error
+// }
 
-type Marshable interface {
-	MarshalBinary() ([]byte, error)
-}
+// type Marshable interface {
+// 	MarshalBinary() ([]byte, error)
+// }
 
 type Cache interface {
-	Set(key string, value Marshable, exp time.Duration) error
+	Set(key string, value any, exp time.Duration) error
 	SetString(key string, value string, exp time.Duration) error
-	Get(key string, value Unmarshable) error
+	Get(key string, value any) error
 	GetString(key string) (string, error)
 	Del(key string) error
 	Exists(ctx context.Context, key string) (bool, error)
@@ -57,15 +57,19 @@ func NewRedis(opts *redis.Options) *Redis {
 	return &Redis{client: redis.NewClient(opts)}
 }
 
-func (r *Redis) Set(key string, value Marshable, exp time.Duration) error {
-	return r.client.Set(context.Background(), key, value, exp).Err()
+func (r *Redis) Set(key string, value any, exp time.Duration) error {
+	encodedValue, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return r.client.Set(context.Background(), key, encodedValue, exp).Err()
 }
 
 func (r *Redis) SetString(key string, value string, exp time.Duration) error {
 	return r.client.Set(context.Background(), key, value, exp).Err()
 }
 
-func (r *Redis) Get(key string, value Unmarshable) (err error) {
+func (r *Redis) Get(key string, value any) (err error) {
 	result := r.client.Get(context.Background(), key)
 	err = result.Err()
 
@@ -73,13 +77,13 @@ func (r *Redis) Get(key string, value Unmarshable) (err error) {
 		return
 	}
 
-	v, err := result.Bytes()
+	vBytes, err := result.Bytes()
 
 	if err != nil {
 		return
 	}
 
-	err = value.UnmarshalBinary(v)
+	err = json.Unmarshal(vBytes, value)
 	return
 }
 
@@ -116,7 +120,7 @@ func (r *Redis) SAdd(ctx context.Context, key string, members ...string) error {
 	if len(members) == 0 {
 		return errors.New("SAdd requires at least one member")
 	}
-	interfaceMembers := make([]interface{}, len(members))
+	interfaceMembers := make([]any, len(members))
 	for i, v := range members {
 		interfaceMembers[i] = v
 	}
@@ -128,7 +132,7 @@ func (r *Redis) SMembers(ctx context.Context, key string) ([]string, error) {
 }
 
 func (r *Redis) SRem(ctx context.Context, key string, members ...string) error {
-	interfaceMembers := make([]interface{}, len(members))
+	interfaceMembers := make([]any, len(members))
 	for i, v := range members {
 		interfaceMembers[i] = v
 	}
