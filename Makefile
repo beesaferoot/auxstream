@@ -20,7 +20,7 @@ migration-status:
 	go run cmd/migration/main.go status
 
 test:
-	go test -v ./tests -coverpkg=./...
+	go test -v ./tests/... -coverpkg=./...
 
 run:
 	go run cmd/server/main.go
