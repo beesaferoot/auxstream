@@ -34,10 +34,20 @@ build-worker:
 
 build-all: build build-worker
 
+build-frontend:
+	cd interface && npm ci && npm run build
+
 run-worker:
 	./build/index_worker -interval 24
 
 run-worker-once:
 	./build/index_worker -once
 
-.PHONY: test run createdb setup-db teardown-db rollback-db init-migration-schema migration-history migration-status build build-worker build-all run-worker run-worker-once
+deploy-backend: build-all
+	sudo systemctl restart auxstream
+	sudo systemctl restart indexer-worker
+
+deploy-frontend: build-frontend
+	sudo systemctl reload nginx
+
+.PHONY: test run createdb setup-db teardown-db rollback-db init-migration-schema migration-history migration-status build build-worker build-all build-frontend run-worker run-worker-once deploy-backend deploy-frontend

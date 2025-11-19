@@ -9,7 +9,9 @@ bin
 
 # env config
 .env
+app.env
 
 uploads
 .idea
 build
+*dist

@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"auxstream/internal/storage"
 	store "auxstream/internal/storage"
 	"os"
 	"testing"
@@ -41,16 +42,18 @@ func TestReadFile(t *testing.T) {
 
 func TestBulkSave(t *testing.T) {
 	var lstore store.FileSystem = store.NewLocalStore(baseLocation)
-	var groupfiles [][]byte
+	var groupfiles []storage.FileMeta
 	var fileNames []string
 
 	for range 10 {
-		groupfiles = append(groupfiles, []byte("hello world"))
+		groupfiles = append(groupfiles, store.FileMeta{
+			Content: []byte("hello world"),
+		})
 	}
-	buf := make(chan string, len(groupfiles))
+	buf := make(chan storage.FileMeta, len(groupfiles))
 	lstore.BulkSave(buf, groupfiles)
-	for fileName := range buf {
-		fileNames = append(fileNames, fileName)
+	for fileMeta := range buf {
+		fileNames = append(fileNames, fileMeta.Name)
 	}
 	require.Equal(t, 10, lstore.Writes())
 	require.Equal(t, 10, len(fileNames))

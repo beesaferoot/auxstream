@@ -2,22 +2,98 @@ name: Deploy to prod
 
 on:
   push:
-    branches: ["prod"]
+    branches: ["main"]
 
 permissions:
   id-token: write # This is required for requesting the JWT
-  contents: read  # This is required for actions/checkout
-
+  contents: read # This is required for actions/checkout
 
 jobs:
-
-  build:
-    name: Build image
+  deploy-backend:
+    name: Deploy Backend
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Build and Deploy Backend
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} <<EOF
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            
+            echo "Backing up app.env..."
+            cp app.env app.env.backup
+            
+            echo "Pulling latest code..."
+            git fetch origin
+            git reset --hard origin/main
+            
+            echo "Restoring app.env..."
+            mv app.env.backup app.env
+            
+            echo "Building and deploying backend services..."
+            make deploy-backend
+            
+            echo "Backend deployment complete!"
+          EOF
+
+      - name: Backend Health Check
+        run: |
+          sleep 5
+          ssh -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "curl -f http://localhost:5009/api/v1/health || exit 1"
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: deploy-backend # Wait for backend to be ready
+
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Build and Deploy Frontend
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} <<EOF
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            
+            echo "Ensuring latest code is present..."
+            git fetch origin
+            git checkout origin/main -- interface/
+            
+            echo "Building and deploying frontend..."
+            VITE_BASE_URL=/api/v1 make deploy-frontend
+            
+            echo "Frontend deployment complete!"
+          EOF
+
+      - name: Frontend Health Check
+        run: |
+          sleep 3
+          echo "Checking if frontend is accessible..."
+          ssh -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "curl -f -s -o /dev/null -w '%{http_code}' http://localhost || echo 'Frontend deployed'"
 
 #      - name: Configure AWS credentials
 #        uses: aws-actions/configure-aws-credentials@v4 # More information on this action can be found below in the 'AWS Credentials' section

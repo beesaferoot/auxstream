@@ -121,14 +121,14 @@ func (rl *RateLimiter) getClientIdentifier(c *gin.Context) string {
 }
 
 // GetStatus returns the current rate limit status for a client
-func (rl *RateLimiter) GetStatus(ctx context.Context, identifier string) (map[string]interface{}, error) {
+func (rl *RateLimiter) GetStatus(ctx context.Context, identifier string) (map[string]any, error) {
 	key := fmt.Sprintf("ratelimit:%s", identifier)
 
 	// Get current count
 	countStr, err := rl.cache.GetString(key)
 	if err != nil {
 		// No entries found, client is clean
-		return map[string]interface{}{
+		return map[string]any{
 			"requests":  0,
 			"limit":     rl.maxRequests,
 			"remaining": rl.maxRequests,
@@ -150,7 +150,7 @@ func (rl *RateLimiter) GetStatus(ctx context.Context, identifier string) (map[st
 		remaining = 0
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"requests":  count,
 		"limit":     rl.maxRequests,
 		"remaining": remaining,

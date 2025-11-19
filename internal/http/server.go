@@ -263,7 +263,7 @@ func (s *server) setupMockRouter() *gin.Engine {
 	return r
 }
 
-func createHTTPHandler(funcHandler func(*gin.Context, ...interface{}), repos ...interface{}) gin.HandlerFunc {
+func createHTTPHandler(funcHandler func(*gin.Context, ...any), repos ...any) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		funcHandler(c, repos...)
 	}
