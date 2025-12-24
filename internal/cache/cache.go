@@ -9,26 +9,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// type Cacheable[T any] struct {
-// 	Value *T
-// }
-
-// func (c *Cacheable[T]) MarshalBinary() ([]byte, error) {
-// 	return json.Marshal(c.Value)
-// }
-
-// func (c *Cacheable[T]) UnmarshalBinary(data []byte) error {
-// 	return json.Unmarshal(data, &c.Value)
-// }
-
-// type Unmarshable interface {
-// 	UnmarshalBinary(data []byte) error
-// }
-
-// type Marshable interface {
-// 	MarshalBinary() ([]byte, error)
-// }
-
 type Cache interface {
 	Set(key string, value any, exp time.Duration) error
 	SetString(key string, value string, exp time.Duration) error
