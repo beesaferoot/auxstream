@@ -10,14 +10,6 @@ ExecStart=/home/beesafe/apps/auxstream/build/index_worker -interval 24
 Restart=on-failure
 RestartSec=10s
 
-# Environment
-Environment="GIN_MODE=release"
-
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=auxstream-indexer
-
 # Security
 NoNewPrivileges=true
 PrivateTmp=true
