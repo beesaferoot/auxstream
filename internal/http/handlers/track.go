@@ -101,7 +101,7 @@ func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 
 type AddTrackForm struct {
 	Title     string                `form:"title" binding:"required"`
-	ArtistId  uuid.UUID             `form:"artist_id" binding:"required"`
+	ArtistId  string                `form:"artist_id" binding:"required"`
 	Audio     *multipart.FileHeader `form:"audio" binding:"required"`
 	Duration  int                   `form:"duration"`  // Optional: duration in seconds
 	Thumbnail string                `form:"thumbnail"` // Optional: thumbnail URL or path
@@ -116,7 +116,12 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 	}
 
 	trackTittle := reqForm.Title
-	trackArtistId := reqForm.ArtistId
+
+	trackArtistId, err := uuid.Parse(reqForm.ArtistId)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse(fmt.Sprintf("artist id should be a valid uuid string not %s", reqForm.ArtistId)))
+	}
 
 	file := reqForm.Audio
 
