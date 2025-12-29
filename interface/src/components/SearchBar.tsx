@@ -16,7 +16,7 @@ import { IoSearch } from "react-icons/io5"
 function SearchBar() {
   const { isOpen, onOpen, onClose } = useDisclosure()
   const [query, setQuery] = useState("")
-  const inputRef = useRef(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const handleKeyPress = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
