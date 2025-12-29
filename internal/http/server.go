@@ -143,7 +143,7 @@ func (s *server) setupRouter() *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	r.MaxMultipartMemory = 5 << 20 // 5 miB
+	r.MaxMultipartMemory = 500 << 20 // 500 miB
 
 	r.Use(middleware.LoggingMiddleware())
 
