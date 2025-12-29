@@ -162,8 +162,6 @@ func (s *server) setupRouter() *gin.Engine {
 
 	v1 := r.Group("/api/v1")
 
-	// Note: Session management removed - using JWT tokens instead
-
 	// Authentication routes
 	v1.POST("/register", s.authService.Register)
 	v1.POST("/login", s.authService.Login)
