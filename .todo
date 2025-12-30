@@ -10,6 +10,10 @@ Backend check list
 [+] limit audio upload size (5mb max)
 [+] allow only mp3 file upload
 [+] create endpoint to partially update an artist record
+[-] perform file checks before saving i.e correct file type, ensure corrupted files are flagged.
+[-] improve file storage i.e compression, hashing, storage checksums etc.
+[-] improve upload_batch_track endpoint to process files much faster.
+
 
 UI check list
 [+] search interface
