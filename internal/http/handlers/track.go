@@ -115,12 +115,12 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		return
 	}
 
-	trackTittle := reqForm.Title
+	trackTitle := reqForm.Title
 
-	trackArtistId, err := uuid.Parse(reqForm.ArtistId)
-
+	trackArtistID, err := uuid.Parse(reqForm.ArtistId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse(fmt.Sprintf("artist id should be a valid uuid string not %s", reqForm.ArtistId)))
+		return
 	}
 
 	file := reqForm.Audio
@@ -135,51 +135,47 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		return
 	}
 
-	raw_file, err := file.Open()
+	audioFile, err := file.Open()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unable to access track audio"))
 		return
 	}
-	raw_bytes := make([]byte, file.Size)
-	if _, readErr := raw_file.Read(raw_bytes); readErr != nil {
+	audioBytes := make([]byte, file.Size)
+	if _, readErr := audioFile.Read(audioBytes); readErr != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unable to read track audio"))
 		return
 	}
-	filePath, err := fs.Store.Save(raw_bytes)
+	filePath, err := fs.Store.Save(audioBytes)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(store) audio upload failed: %s", err.Error())))
 		return
 	}
 
-	artist := &db.Artist{ID: trackArtistId}
+	artist := &db.Artist{ID: trackArtistID}
 
 	ctx := c.Request.Context()
 	cacheClient, ok := ctx.Value("cacheClient").(cache.Cache)
 
-	artistCacheKey := "artist-id-" + fmt.Sprintf("%d", trackArtistId)
-	// cache client exists
+	artistCacheKey := fmt.Sprintf("artist-id-%s", trackArtistID)
 	if ok {
-		err = cacheClient.Get(artistCacheKey, artist)
-		if err != nil {
-			log.Printf("(Get artist id from cache) failed: %s\n", err.Error())
-			err = nil
+		if cacheErr := cacheClient.Get(artistCacheKey, artist); cacheErr != nil {
+			log.Printf("(Get artist id from cache) failed: %s\n", cacheErr.Error())
 		}
 	}
 
-	// artist should point to a value from cache if cache hit was successful
 	if artist.Name == "" {
-		artist, err = artistRepo.GetArtistById(c, trackArtistId)
+		artist, err = artistRepo.GetArtistById(c, trackArtistID)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusNotFound, errorResponse(fmt.Sprintf("artist with id (%d) does not exists: %s", trackArtistId, err.Error())))
+			c.AbortWithStatusJSON(http.StatusNotFound, errorResponse(fmt.Sprintf("artist with id (%s) does not exist: %s", trackArtistID, err.Error())))
 			return
 		}
-		_ = cacheClient.Set(artistCacheKey, artist, 10*time.Hour)
+		if ok {
+			_ = cacheClient.Set(artistCacheKey, artist, 10*time.Hour)
+		}
 	}
 
-	track, err := r.CreateTrack(c, trackTittle, trackArtistId, filePath, reqForm.Duration, reqForm.Thumbnail)
+	track, err := r.CreateTrack(c, trackTitle, trackArtistID, filePath, reqForm.Duration, reqForm.Thumbnail)
 	if err != nil {
-		fmt.Printf("Artist: %v\n", artist)
-		fmt.Printf("Error: %s\n", err.Error())
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(db) audio upload failed: %s", err.Error())))
 		return
 	}
@@ -197,36 +193,33 @@ type BulkTrackUploadForm struct {
 // BulkTrackUploadHandler enables bulk track uploads
 func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 	var reqForm BulkTrackUploadForm
-	var artistId uuid.UUID
 
 	if err := c.ShouldBind(&reqForm); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 		return
 	}
 
-	artistId, err := uuid.Parse(reqForm.ArtistId)
+	artistID, err := uuid.Parse(reqForm.ArtistId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse(fmt.Sprintf("invalid artist id: %s", reqForm.ArtistId)))
 		return
 	}
 
 	fileMetas, err := processFiles(reqForm.Files, reqForm.Titles)
-
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
 		return
 	}
 
 	var trackTitles []string
-	var filteredFileNames = map[string]string{}
-	// filter tracks that failed to upload
+	filteredFileNames := map[string]string{}
 	for title, fileMeta := range fileMetas {
 		if fileMeta.Name != "" {
 			trackTitles = append(trackTitles, title)
 			filteredFileNames[title] = fileMeta.Name
 		}
 	}
-	rows, err := r.BulkCreateTracks(c, trackTitles, artistId, filteredFileNames)
+	rows, err := r.BulkCreateTracks(c, trackTitles, artistID, filteredFileNames)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
@@ -241,37 +234,37 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 	})
 }
 
-func processFiles(files []*multipart.FileHeader, titles []string) (fileMeta map[string]fs.FileMeta, err error) {
+func processFiles(files []*multipart.FileHeader, titles []string) (map[string]fs.FileMeta, error) {
 	var groupFiles []fs.FileMeta
-	var groupTitles = map[string]string{}
+	groupTitles := map[string]string{}
+
 	for idx, file := range files {
-		raw_file, fileErr := file.Open()
 		groupTitles[file.Filename] = titles[idx]
+
+		audioFile, fileErr := file.Open()
 		if fileErr != nil {
 			groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: []byte{}})
 			continue
 		}
-		raw_bytes := make([]byte, file.Size)
-		if _, readErr := raw_file.Read(raw_bytes); readErr != nil {
+		audioBytes := make([]byte, file.Size)
+		if _, readErr := audioFile.Read(audioBytes); readErr != nil {
 			groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: []byte{}})
 			continue
 		}
-		groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: raw_bytes[:file.Size]})
+		groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: audioBytes})
 	}
 
-	buf_channel := make(chan fs.FileMeta, len(groupFiles))
+	resultCh := make(chan fs.FileMeta, len(groupFiles))
+	fs.Store.BulkSave(resultCh, groupFiles)
 
-	// concurrently write files to disk
-	fs.Store.BulkSave(buf_channel, groupFiles)
-
-	fileMeta = map[string]fs.FileMeta{}
-	for fmeta := range buf_channel {
+	fileMeta := map[string]fs.FileMeta{}
+	for fmeta := range resultCh {
 		if fmeta.Name != "" {
 			fileMeta[groupTitles[fmeta.AudioTitle]] = fmeta
 		}
 	}
 
-	return
+	return fileMeta, nil
 }
 
 type TrackPlayRequest struct {

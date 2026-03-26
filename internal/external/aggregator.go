@@ -2,10 +2,12 @@ package external
 
 import (
 	"auxstream/internal/db"
+	"auxstream/internal/logger"
 	"context"
 	"fmt"
-	"log"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 // SearchResult represents a unified search result from any source
@@ -58,13 +60,12 @@ func (a *Aggregator) Search(ctx context.Context, query string, maxResults int) (
 		resultsPerSource = 5
 	}
 
-	// Search local database
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		localResults, err := a.searchLocal(ctx, query, resultsPerSource)
 		if err != nil {
-			log.Printf("Error searching local database: %v", err)
+			logger.Error("Error searching local database", zap.Error(err))
 			return
 		}
 		mu.Lock()
@@ -78,7 +79,7 @@ func (a *Aggregator) Search(ctx context.Context, query string, maxResults int) (
 			defer wg.Done()
 			ytResults, err := a.searchYouTube(ctx, query, resultsPerSource)
 			if err != nil {
-				log.Printf("Error searching YouTube: %v", err)
+				logger.Error("Error searching YouTube", zap.Error(err))
 				return
 			}
 			mu.Lock()
@@ -87,14 +88,13 @@ func (a *Aggregator) Search(ctx context.Context, query string, maxResults int) (
 		}()
 	}
 
-	// Search SoundCloud if client is available
 	if a.soundcloudClient != nil && a.soundcloudClient.clientID != "" {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			scResults, err := a.searchSoundCloud(ctx, query, resultsPerSource)
 			if err != nil {
-				log.Printf("Error searching SoundCloud: %v", err)
+				logger.Error("Error searching SoundCloud", zap.Error(err))
 				return
 			}
 			mu.Lock()
@@ -112,23 +112,19 @@ func (a *Aggregator) Search(ctx context.Context, query string, maxResults int) (
 	return results, nil
 }
 
-// searchLocal searches the local database for tracks
 func (a *Aggregator) searchLocal(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
-	// Search by title
 	tracks, err := a.trackRepo.GetTrackByTitle(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search local tracks: %w", err)
 	}
 
-	// Also search by artist
 	artistTracks, err := a.trackRepo.GetTrackByArtist(ctx, query)
 	if err != nil {
-		log.Printf("Error searching by artist: %v", err)
+		logger.Error("Error searching by artist", zap.Error(err))
 	} else {
 		tracks = append(tracks, artistTracks...)
 	}
 
-	// Remove duplicates
 	seen := make(map[string]bool)
 	var uniqueTracks []*db.Track
 	for _, track := range tracks {
@@ -138,22 +134,16 @@ func (a *Aggregator) searchLocal(ctx context.Context, query string, maxResults i
 		}
 	}
 
-	// Convert to search results
 	var results []SearchResult
 	for i, track := range uniqueTracks {
 		if i >= maxResults {
 			break
 		}
 
-		artistName := ""
-		if track.Artist.Name != "" {
-			artistName = track.Artist.Name
-		}
-
 		results = append(results, SearchResult{
 			ID:        track.ID.String(),
 			Title:     track.Title,
-			Artist:    artistName,
+			Artist:    track.Artist.Name,
 			Duration:  track.Duration,
 			Thumbnail: track.Thumbnail,
 			Source:    "local",

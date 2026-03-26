@@ -2,11 +2,9 @@ package db
 
 import (
 	"auxstream/config"
-	"context"
-	"github.com/go-playground/validator/v10"
 	"log"
-	"os"
 
+	"github.com/go-playground/validator/v10"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -14,31 +12,25 @@ import (
 
 var validate = validator.New()
 
-// InitDB initializes a GORM database connection with pgx driver
-func InitDB(config config.Config, ctx context.Context) *gorm.DB {
-	// Configure GORM logger
+// InitDB initializes a GORM database connection with PostgreSQL.
+func InitDB(conf config.Config) *gorm.DB {
 	gormLogger := logger.Default.LogMode(logger.Info)
-	if config.GinMode == "release" {
+	if conf.GinMode == "release" {
 		gormLogger = logger.Default.LogMode(logger.Error)
 	}
 
-	// Open database connection using GORM with pgx driver
-	db, err := gorm.Open(postgres.Open(config.DBUrl), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(conf.DBUrl), &gorm.Config{
 		Logger: gormLogger,
 	})
-
 	if err != nil {
-		log.Printf("Unable to connect to database: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Unable to connect to database: %v", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Printf("Unable to get underlying sql.DB: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Unable to get underlying sql.DB: %v", err)
 	}
 
-	// Configure connection pool
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 

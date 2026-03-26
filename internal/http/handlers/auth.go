@@ -48,7 +48,7 @@ type RefreshTokenRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
-// Register handles user registration with email and password
+// Register handles user registration with email and password.
 func (a *AuthService) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -56,14 +56,12 @@ func (a *AuthService) Register(c *gin.Context) {
 		return
 	}
 
-	// Check if user already exists
 	_, err := a.userRepo.GetUserByEmail(c.Request.Context(), req.Email)
 	if err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "User with this email already exists"})
 		return
 	}
 
-	// Hash password
 	hashedPassword, err := hashPassword(req.Password)
 	if err != nil {
 		log.Printf("Password hash failure: %v", err)
@@ -71,7 +69,6 @@ func (a *AuthService) Register(c *gin.Context) {
 		return
 	}
 
-	// Create user
 	user := &db.User{
 		Email:        req.Email,
 		PasswordHash: hashedPassword,
@@ -86,7 +83,6 @@ func (a *AuthService) Register(c *gin.Context) {
 		return
 	}
 
-	// Generate tokens
 	accessToken, err := a.jwtService.GenerateAccessToken(createdUser.ID, createdUser.Email)
 	if err != nil {
 		log.Printf("GenerateAccessToken error: %v", err)
@@ -114,7 +110,7 @@ func (a *AuthService) Register(c *gin.Context) {
 	})
 }
 
-// Login handles user login with email and password
+// Login handles user login with email and password.
 func (a *AuthService) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -122,20 +118,17 @@ func (a *AuthService) Login(c *gin.Context) {
 		return
 	}
 
-	// Get user by email
 	user, err := a.userRepo.GetUserByEmail(c.Request.Context(), req.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Check password
 	if !cmpHashString(user.PasswordHash, req.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Generate tokens
 	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Email)
 	if err != nil {
 		log.Printf("GenerateAccessToken error: %v", err)
@@ -163,7 +156,7 @@ func (a *AuthService) Login(c *gin.Context) {
 	})
 }
 
-// RefreshToken handles refresh token requests
+// RefreshToken handles token refresh requests.
 func (a *AuthService) RefreshToken(c *gin.Context) {
 	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -171,34 +164,29 @@ func (a *AuthService) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Validate refresh token
 	claims, err := a.jwtService.ValidateRefreshToken(req.RefreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
 		return
 	}
 
-	// Check if refresh token exists in Redis
 	userID, err := uuid.Parse(claims.Subject)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token subject"})
 		return
 	}
 
-	_, err = a.refreshService.ValidateRefreshToken(c.Request.Context(), claims.ID)
-	if err != nil {
+	if _, err = a.refreshService.ValidateRefreshToken(c.Request.Context(), claims.ID); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token not found or expired"})
 		return
 	}
 
-	// Get user
 	user, err := a.userRepo.GetUserById(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 		return
 	}
 
-	// Generate new access token
 	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Email)
 	if err != nil {
 		log.Printf("GenerateAccessToken error: %v", err)
@@ -218,23 +206,20 @@ func (a *AuthService) RefreshToken(c *gin.Context) {
 	})
 }
 
-// Logout handles user logout and token revocation
+// Logout handles user logout and token revocation.
 func (a *AuthService) Logout(c *gin.Context) {
-	// Get refresh token from request body
 	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Validate refresh token to get token ID
 	claims, err := a.jwtService.ValidateRefreshToken(req.RefreshToken)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid refresh token"})
 		return
 	}
 
-	// Revoke refresh token
 	err = a.refreshService.RevokeRefreshToken(c.Request.Context(), claims.ID)
 	if err != nil {
 		log.Printf("RevokeRefreshToken error: %v", err)
@@ -245,30 +230,25 @@ func (a *AuthService) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
-// GoogleAuth initiates Google OAuth flow
+// GoogleAuth initiates the Google OAuth flow.
 func (a *AuthService) GoogleAuth(c *gin.Context) {
 	state := uuid.New().String()
 	authURL := a.oauthService.GetAuthURL(state)
 
-	// Store state in session or Redis for verification
-	// For now, we'll redirect directly
 	c.JSON(http.StatusOK, gin.H{
 		"auth_url": authURL,
 		"state":    state,
 	})
 }
 
-// GoogleCallback handles Google OAuth callback
+// GoogleCallback handles the Google OAuth callback.
 func (a *AuthService) GoogleCallback(c *gin.Context) {
 	code := c.Query("code")
-	_ = c.Query("state")
-
 	if code == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code not provided"})
 		return
 	}
 
-	// Exchange code for token
 	token, err := a.oauthService.ExchangeCodeForToken(c.Request.Context(), code)
 	if err != nil {
 		log.Printf("ExchangeCodeForToken error: %v", err)
@@ -276,7 +256,6 @@ func (a *AuthService) GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	// Get user info from Google
 	googleUser, err := a.oauthService.GetUserInfo(c.Request.Context(), token)
 	if err != nil {
 		log.Printf("GetUserInfo error: %v", err)
@@ -284,7 +263,6 @@ func (a *AuthService) GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	// Find or create user
 	user, err := a.oauthService.FindOrCreateUser(c.Request.Context(), googleUser)
 	if err != nil {
 		log.Printf("FindOrCreateUser error: %v", err)
@@ -292,7 +270,6 @@ func (a *AuthService) GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	// Generate tokens
 	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Email)
 	if err != nil {
 		log.Printf("GenerateAccessToken error: %v", err)

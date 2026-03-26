@@ -41,16 +41,11 @@ func main() {
 		zap.Bool("run_once", *runOnce),
 	)
 
-	// Initialize Redis cache
 	redisCache := cache.NewRedis(&redis.Options{
-		Addr:     conf.RedisAddr,
-		Password: "",
-		DB:       0,
+		Addr: conf.RedisAddr,
 	})
 
-	// Test Redis connection
-	testCtx := context.Background()
-	if _, err := redisCache.Exists(testCtx, "test_connection"); err != nil {
+	if _, err := redisCache.Exists(context.Background(), "test_connection"); err != nil {
 		logger.Fatal("Failed to connect to Redis", zap.Error(err))
 	}
 
@@ -58,7 +53,6 @@ func main() {
 		zap.String("address", conf.RedisAddr),
 	)
 
-	// Initialize indexing service (scraper registry is internal)
 	indexingService := indexer.NewIndexingService(redisCache)
 
 	interval := time.Duration(*intervalHours) * time.Hour
@@ -71,7 +65,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -82,12 +75,9 @@ func main() {
 		return
 	}
 
-	// Start worker in background
 	go worker.Start(ctx)
-
 	logger.Info("Indexer worker started, waiting for signals...")
 
-	// Wait for shutdown signal
 	<-sigChan
 	logger.Info("Received shutdown signal, stopping worker...")
 	cancel()

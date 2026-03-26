@@ -70,35 +70,23 @@ func (o *OAuthService) GetUserInfo(ctx context.Context, token *oauth2.Token) (*G
 	return &userInfo, nil
 }
 
+// FindOrCreateUser locates a user by Google ID or email, creating one if neither match.
 func (o *OAuthService) FindOrCreateUser(ctx context.Context, googleUser *GoogleUserInfo) (*db.User, error) {
-	// First, try to find user by Google ID
 	user, err := o.userRepo.GetUserByGoogleID(ctx, googleUser.ID)
 	if err == nil {
 		return user, nil
 	}
 
-	// If not found by Google ID, try to find by email
 	user, err = o.userRepo.GetUserByEmail(ctx, googleUser.Email)
 	if err == nil {
-		// User exists with this email, update their Google ID
 		user.GoogleID = googleUser.ID
 		user.Provider = "google"
-
-		// Update the user
 		return o.userRepo.UpdateUser(ctx, user)
 	}
 
-	// Create new user
-	newUser := &db.User{
-		Email:     googleUser.Email,
-		GoogleID:  googleUser.ID,
-		Provider:  "google",
-	}
-
-	createdUser, err := o.userRepo.CreateUser(ctx, newUser)
-	if err != nil {
-		return nil, err
-	}
-
-	return createdUser, nil
+	return o.userRepo.CreateUser(ctx, &db.User{
+		Email:    googleUser.Email,
+		GoogleID: googleUser.ID,
+		Provider: "google",
+	})
 }

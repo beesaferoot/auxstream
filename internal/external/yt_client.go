@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -183,7 +184,7 @@ func (y *YouTubeClient) getVideoDurations(ctx context.Context, videoIDs []string
 		batch := videoIDs[i:end]
 		params := url.Values{}
 		params.Add("part", "contentDetails")
-		params.Add("id", joinStrings(batch, ","))
+		params.Add("id", strings.Join(batch, ","))
 		params.Add("key", y.apiKey)
 
 		videoURL := fmt.Sprintf("%s/videos?%s", y.baseURL, params.Encode())
@@ -232,14 +233,3 @@ func parseISO8601Duration(duration string) int {
 	return hours*3600 + minutes*60 + seconds
 }
 
-// joinStrings joins a slice of strings with a separator
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
-}

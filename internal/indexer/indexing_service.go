@@ -6,6 +6,7 @@ import (
 	"auxstream/internal/metrics"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -113,10 +114,10 @@ func (s *IndexingService) SearchIndexedTracks(source, query string, limit int) [
 	}
 
 	results := make([]*ScrapedMetadata, 0)
-	queryLower := toLower(query)
+	queryLower := strings.ToLower(query)
 
 	for _, track := range allTracks {
-		if contains(toLower(track.Title), queryLower) || contains(toLower(track.Artist), queryLower) {
+		if strings.Contains(strings.ToLower(track.Title), queryLower) || strings.Contains(strings.ToLower(track.Artist), queryLower) {
 			results = append(results, track)
 			if len(results) >= limit {
 				break
@@ -127,29 +128,3 @@ func (s *IndexingService) SearchIndexedTracks(source, query string, limit int) [
 	return results
 }
 
-func toLower(s string) string {
-	result := make([]rune, len(s))
-	for i, r := range s {
-		if r >= 'A' && r <= 'Z' {
-			result[i] = r + 32
-		} else {
-			result[i] = r
-		}
-	}
-	return string(result)
-}
-
-func contains(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

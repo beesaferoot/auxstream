@@ -10,10 +10,9 @@ import (
 
 const UserContextKey = "user"
 
-// JWTAuthMiddleware validates JWT tokens and sets user context
+// JWTAuthMiddleware validates JWT tokens and sets user claims in context.
 func (j *JWTService) JWTAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get token from Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
@@ -21,7 +20,6 @@ func (j *JWTService) JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Check if header starts with "Bearer "
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Bearer token required"})
@@ -29,7 +27,6 @@ func (j *JWTService) JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Validate token
 		claims, err := j.ValidateAccessToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
@@ -37,11 +34,8 @@ func (j *JWTService) JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Set user context
 		ctx := context.WithValue(c.Request.Context(), UserContextKey, claims)
 		c.Request = c.Request.WithContext(ctx)
-
-		// Continue to next handler
 		c.Next()
 	}
 }

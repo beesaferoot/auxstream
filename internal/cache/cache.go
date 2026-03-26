@@ -49,34 +49,22 @@ func (r *Redis) SetString(key string, value string, exp time.Duration) error {
 	return r.client.Set(context.Background(), key, value, exp).Err()
 }
 
-func (r *Redis) Get(key string, value any) (err error) {
+func (r *Redis) Get(key string, value any) error {
 	result := r.client.Get(context.Background(), key)
-	err = result.Err()
-
-	if err != nil {
-		return
+	if err := result.Err(); err != nil {
+		return err
 	}
 
 	vBytes, err := result.Bytes()
-
 	if err != nil {
-		return
+		return err
 	}
 
-	err = json.Unmarshal(vBytes, value)
-	return
+	return json.Unmarshal(vBytes, value)
 }
 
 func (r *Redis) GetString(key string) (string, error) {
-	result := r.client.Get(context.Background(), key)
-
-	err := result.Err()
-
-	if err != nil {
-		return "", err
-	}
-
-	return result.Result()
+	return r.client.Get(context.Background(), key).Result()
 }
 
 func (r *Redis) Del(key string) error {

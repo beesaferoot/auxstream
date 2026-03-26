@@ -51,12 +51,10 @@ func (r *RefreshTokenService) StoreRefreshToken(ctx context.Context, userID uuid
 		return errors.New("invalid expiration time for refresh token")
 	}
 
-	// Save token data
 	if err := r.cache.Set(key, refreshData, ttl); err != nil {
 		return fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
-	// Track token under the user's list for easy revocation
 	userKey := fmt.Sprintf("user_tokens:%s", userID.String())
 	return r.cache.SAdd(ctx, userKey, tokenID)
 }
@@ -72,7 +70,6 @@ func (r *RefreshTokenService) ValidateRefreshToken(ctx context.Context, tokenID 
 	}
 
 	if time.Now().After(refreshData.ExpiresAt) {
-		// Clean up expired token
 		_ = r.cache.Del(key)
 		return nil, errors.New("refresh token expired")
 	}
@@ -99,27 +96,22 @@ func (r *RefreshTokenService) RevokeAllUserTokens(ctx context.Context, userID uu
 		_ = r.cache.Del(fmt.Sprintf("refresh_token:%s", tokenID))
 	}
 
-	// Delete the user's token tracking key
 	return r.cache.Del(userKey)
 }
 
 // GenerateAndStoreRefreshToken creates a new refresh token and stores it in the cache.
 func (r *RefreshTokenService) GenerateAndStoreRefreshToken(ctx context.Context, userID uuid.UUID) (string, error) {
-	// Generate a new refresh token
 	tokenString, err := r.jwtService.GenerateRefreshToken(userID)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Validate token to extract claims (ID, Expiry)
 	claims, err := r.jwtService.ValidateRefreshToken(tokenString)
 	if err != nil {
 		return "", fmt.Errorf("failed to validate refresh token: %w", err)
 	}
 
-	// Store the refresh token in cache
-	err = r.StoreRefreshToken(ctx, userID, claims.ID, claims.ExpiresAt.Time)
-	if err != nil {
+	if err = r.StoreRefreshToken(ctx, userID, claims.ID, claims.ExpiresAt.Time); err != nil {
 		return "", fmt.Errorf("failed to store refresh token: %w", err)
 	}
 

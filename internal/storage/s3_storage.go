@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-// S3Store a FileSystem interface def over s3 storage
+// S3Store implements FileSystem over AWS S3 storage.
 type S3Store struct {
 	session   *session.Session
 	bucketId  string
@@ -43,10 +43,7 @@ func (s3 *S3Store) Save(raw []byte) (filename string, err error) {
 
 	freader := bytes.NewReader(raw)
 
-	// Create an uploader with the session
 	uploader := s3manager.NewUploader(s3.session)
-
-	// Upload the file to S3.
 	result, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(s3.bucketId),
 		Key:    aws.String(filename),
@@ -65,31 +62,26 @@ func (s3 *S3Store) Save(raw []byte) (filename string, err error) {
 	return
 }
 
-func (s3 *S3Store) Read(location string) (file File, err error) {
-	// Create a downloader with the session=
+func (s3 *S3Store) Read(location string) (File, error) {
 	downloader := s3manager.NewDownloader(s3.session)
-	// Create a file to write the S3 Object contents to.
-	lfile, err := NewFile(os.TempDir() + location)
-	file = lfile
 
+	lfile, err := NewFile(os.TempDir() + location)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create file %q, %v", location, err)
+		return nil, fmt.Errorf("failed to create file %q: %w", location, err)
 	}
 
-	_, err = downloader.Download(lfile, &s3API.GetObjectInput{
+	if _, err = downloader.Download(lfile, &s3API.GetObjectInput{
 		Bucket: aws.String(s3.bucketId),
 		Key:    aws.String(location),
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to download file, %v", err)
+	}); err != nil {
+		return nil, fmt.Errorf("failed to download file: %w", err)
 	}
 
 	s3.mu.Lock()
 	s3.downloads++
 	s3.mu.Unlock()
 
-	return
+	return lfile, nil
 }
 
 func (s3 *S3Store) BulkSave(buf chan<- FileMeta, listOfFileMeta []FileMeta) {
@@ -112,20 +104,10 @@ func (s3 *S3Store) BulkSave(buf chan<- FileMeta, listOfFileMeta []FileMeta) {
 }
 
 func (s3 *S3Store) Remove(fileName string) error {
-	deleteObjectInput := &s3API.DeleteObjectInput{
+	s3Client := s3API.New(s3.session)
+	_, err := s3Client.DeleteObject(&s3API.DeleteObjectInput{
 		Bucket: aws.String(s3.bucketId),
 		Key:    aws.String(fileName),
-	}
-
-	s3Client := s3API.New(s3.session)
-
-	// Delete the object
-	_, err := s3Client.DeleteObject(deleteObjectInput)
-	if err != nil {
-		log.Println("Error deleting object:", err)
-		return err
-	}
-
-	log.Printf("Object '%s' deleted from bucket '%s'\n", fileName, s3.bucketId)
-	return nil
+	})
+	return err
 }

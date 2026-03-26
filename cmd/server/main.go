@@ -1,12 +1,11 @@
 package main
 
 import (
+	"auxstream/config"
 	"auxstream/internal/cache"
 	"auxstream/internal/db"
 	"auxstream/internal/http"
 	fs "auxstream/internal/storage"
-	"auxstream/config"
-	"context"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -14,35 +13,30 @@ import (
 )
 
 func main() {
-	config, err := config.LoadConfig(".")
+	conf, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatal("could not load env config: ", err.Error())
 	}
 
-	// Initialize database with GORM
-	database := db.InitDB(config, context.Background())
+	database := db.InitDB(conf)
 
-	gin.SetMode(config.GinMode)
+	gin.SetMode(conf.GinMode)
 
 	rc := cache.NewRedis(&redis.Options{
-		Addr: config.RedisAddr,
+		Addr: conf.RedisAddr,
 	})
 
-	err = fs.SetFileStore(config)
-
-	if err != nil {
-		log.Fatalf("failed set file store: %s", err.Error())
+	if err = fs.SetFileStore(conf); err != nil {
+		log.Fatalf("failed to set file store: %s", err.Error())
 	}
 
 	server := http.NewServer(http.ServerConfig{
 		Cache: rc,
 		DB:    database,
-		Conf:  config,
+		Conf:  conf,
 	})
 
-	err = server.Run()
-	if err != nil {
+	if err = server.Run(); err != nil {
 		log.Fatalf("failed to start server: %s", err.Error())
 	}
-
 }

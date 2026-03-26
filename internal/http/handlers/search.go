@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"auxstream/internal/search"
-	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-// SearchHandler handles unified search requests
+// SearchHandler handles unified search requests across all configured sources.
 func SearchHandler(c *gin.Context, searchService *search.Service) {
 	query := c.Query("q")
 	if query == "" {
@@ -16,18 +16,12 @@ func SearchHandler(c *gin.Context, searchService *search.Service) {
 		return
 	}
 
-	source := c.Query("source") // "local", "youtube", or empty for all
+	source := c.Query("source")
 	maxResults := 20
 
 	if maxResultsStr := c.Query("max_results"); maxResultsStr != "" {
-		var maxResultsParam int
-		if _, err := c.GetQuery("max_results"); err {
-			if parsedMaxResults, parseErr := parseIntParam(maxResultsStr); parseErr == nil {
-				maxResultsParam = parsedMaxResults
-				if maxResultsParam > 0 {
-					maxResults = maxResultsParam
-				}
-			}
+		if parsed, err := strconv.Atoi(maxResultsStr); err == nil && parsed > 0 {
+			maxResults = parsed
 		}
 	}
 
@@ -46,11 +40,4 @@ func SearchHandler(c *gin.Context, searchService *search.Service) {
 	c.JSON(http.StatusOK, gin.H{
 		"data": results,
 	})
-}
-
-// parseIntParam safely parses an integer parameter
-func parseIntParam(s string) (int, error) {
-	var result int
-	_, err := fmt.Sscanf(s, "%d", &result)
-	return result, err
 }

@@ -18,7 +18,7 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 )
 
-// CloundinaryStore a FileSystem interface def over cloudinary
+// CloudinaryStore implements FileSystem over Cloudinary object storage.
 type CloudinaryStore struct {
 	cloudinaryInstance *cloudinary.Cloudinary
 	mu                 sync.Mutex
@@ -75,22 +75,26 @@ func (cld *CloudinaryStore) Save(raw []byte) (filename string, err error) {
 	return filename, nil
 }
 
-func (cld *CloudinaryStore) Read(locationUrl string) (file File, err error) {
-	resp, err := http.Get(locationUrl)
-
-	file, err = NewFile(os.TempDir() + genFileName())
-
+func (cld *CloudinaryStore) Read(locationURL string) (File, error) {
+	resp, err := http.Get(locationURL) //nolint:gosec // URL comes from Cloudinary upload result
 	if err != nil {
-		return nil, fmt.Errorf("failed to get asset, %v", err)
+		return nil, fmt.Errorf("failed to fetch asset: %w", err)
+	}
+	defer resp.Body.Close()
+
+	file, err := NewFile(os.TempDir() + genFileName())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
 
-	_, err = io.Copy(file, resp.Body)
-
-	if err == nil {
-		cld.mu.Lock()
-		cld.downloads++
-		cld.mu.Unlock()
+	if _, err = io.Copy(file, resp.Body); err != nil {
+		return nil, fmt.Errorf("failed to write asset to file: %w", err)
 	}
+
+	cld.mu.Lock()
+	cld.downloads++
+	cld.mu.Unlock()
+
 	return file, nil
 }
 

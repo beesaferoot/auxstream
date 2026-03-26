@@ -9,7 +9,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/aws/aws-sdk-go v1.49.9
-	github.com/beesaferoot/gorm-migrate v0.0.5
+	github.com/beesaferoot/gorm-migrate v0.0.6
 	github.com/cloudinary/cloudinary-go/v2 v2.7.0
 	github.com/gin-contrib/cors v1.4.0
 	github.com/gin-gonic/gin v1.9.0

@@ -42,17 +42,14 @@ type server struct {
 }
 
 func NewServer(serverConfig ServerConfig) Server {
-	// Initialize JWT service
 	jwtService := auth.NewJWTService(
 		serverConfig.Conf.JWTSecret,
 		time.Hour,      // Access token TTL
 		24*time.Hour*7, // Refresh token TTL (7 days)
 	)
 
-	// Initialize refresh token service
 	refreshService := auth.NewRefreshTokenService(serverConfig.Cache, jwtService)
 
-	// Initialize OAuth service
 	oauthService := auth.NewOAuthService(
 		serverConfig.Conf.GoogleClientID,
 		serverConfig.Conf.GoogleClientSecret,
@@ -60,7 +57,6 @@ func NewServer(serverConfig ServerConfig) Server {
 		db.NewUserRepo(serverConfig.DB),
 	)
 
-	// Initialize auth service
 	authService := handlers.NewAuthService(
 		db.NewUserRepo(serverConfig.DB),
 		jwtService,
@@ -68,15 +64,12 @@ func NewServer(serverConfig ServerConfig) Server {
 		oauthService,
 	)
 
-	// Initialize YouTube and SoundCloud clients
 	youtubeClient := external.NewYouTubeClient(serverConfig.Conf.YouTubeAPIKey)
 	soundcloudClient := external.NewSoundCloudClient(serverConfig.Conf.SoundCloudClientID)
 
-	// Initialize search aggregator
 	aggregator := external.NewAggregator(youtubeClient, soundcloudClient, db.NewTrackRepo(serverConfig.DB))
 	searchService := search.NewService(aggregator, serverConfig.Cache)
 
-	// Initialize rate limiter
 	rateLimiter := middleware.NewRateLimiter(serverConfig.Cache, middleware.RateLimitConfig{
 		MaxRequests: 20,
 		Window:      time.Minute,
@@ -162,7 +155,6 @@ func (s *server) setupRouter() *gin.Engine {
 
 	v1 := r.Group("/api/v1")
 
-	// Authentication routes
 	v1.POST("/register", s.authService.Register)
 	v1.POST("/login", s.authService.Login)
 	v1.POST("/refresh", s.authService.RefreshToken)
@@ -170,10 +162,8 @@ func (s *server) setupRouter() *gin.Engine {
 	v1.GET("/auth/google", s.authService.GoogleAuth)
 	v1.GET("/auth/google/callback", s.authService.GoogleCallback)
 
-	// Artist Management Routes
 	artists := v1.Group("/artists")
 	{
-		// Public routes
 		artists.GET("/:id", func(c *gin.Context) {
 			handlers.GetArtistByIdHandler(c, db.NewArtistRepo(s.db))
 		})
@@ -184,16 +174,13 @@ func (s *server) setupRouter() *gin.Engine {
 			handlers.FetchTracksByArtistHandler(c, db.NewTrackRepo(s.db))
 		})
 
-		// Protected routes
 		artists.POST("", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 			handlers.CreateArtistHandler(c, db.NewArtistRepo(s.db))
 		})
 	}
 
-	// Track Management Routes
 	tracks := v1.Group("/tracks")
 	{
-		// Public routes
 		tracks.GET("", func(c *gin.Context) {
 			handlers.FetchTracksHandler(c, db.NewTrackRepo(s.db))
 		})
@@ -201,12 +188,10 @@ func (s *server) setupRouter() *gin.Engine {
 			handlers.GetTrackByIDHandler(c, db.NewTrackRepo(s.db))
 		})
 
-		// Track playback recording (no auth required to allow anonymous plays)
 		tracks.POST("/play", func(c *gin.Context) {
 			handlers.TrackPlayHandler(c, db.NewTrackRepo(s.db))
 		})
 
-		// Protected routes with rate limiting
 		tracks.POST("", s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 			handlers.AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
 		})
@@ -215,7 +200,6 @@ func (s *server) setupRouter() *gin.Engine {
 		})
 	}
 
-	// Legacy upload endpoints (for backward compatibility)
 	v1.POST("/upload_track", s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 		handlers.AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
 	})
@@ -223,12 +207,10 @@ func (s *server) setupRouter() *gin.Engine {
 		handlers.BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
 	})
 
-	// Search Routes
 	v1.GET("/search", s.rateLimiter.Middleware(), func(c *gin.Context) {
 		handlers.SearchHandler(c, s.searchService)
 	})
 
-	// Static file serving
 	v1.Static("/serve", "./uploads")
 
 	return r
@@ -259,12 +241,6 @@ func (s *server) setupMockRouter() *gin.Engine {
 	})
 
 	return r
-}
-
-func createHTTPHandler(funcHandler func(*gin.Context, ...any), repos ...any) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		funcHandler(c, repos...)
-	}
 }
 
 func injectCache(cache cache.Cache) gin.HandlerFunc {
