@@ -47,7 +47,7 @@ func (a *Aggregator) Search(ctx context.Context, query string, maxResults int) (
 		results []SearchResult
 	)
 
-	availableSources := 1 // Always have local
+	availableSources := 1 // the local database is always searchable
 	if a.youtubeClient != nil && a.youtubeClient.apiKey != "" {
 		availableSources++
 	}

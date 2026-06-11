@@ -5,6 +5,7 @@ import (
 	"auxstream/internal/db"
 	fs "auxstream/internal/storage"
 	"fmt"
+	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -41,7 +42,8 @@ func FetchTracksByArtistHandler(c *gin.Context, r db.TrackRepo) {
 	artist := c.Query("artist")
 	tracks, err := r.GetTrackByArtist(c, artist)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
+		log.Printf("GetTrackByArtist error: %v", err)
+		c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch tracks"))
 		return
 	}
 
@@ -89,7 +91,8 @@ func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
+		log.Printf("FetchTracks error: %v", err)
+		c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch tracks"))
 		return
 	}
 
@@ -140,21 +143,25 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unable to access track audio"))
 		return
 	}
+	defer audioFile.Close()
+	// io.ReadFull guarantees the whole file is read; a bare Read may return fewer
+	// bytes than requested and silently truncate the stored audio.
 	audioBytes := make([]byte, file.Size)
-	if _, readErr := audioFile.Read(audioBytes); readErr != nil {
+	if _, readErr := io.ReadFull(audioFile, audioBytes); readErr != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unable to read track audio"))
 		return
 	}
 	filePath, err := fs.Store.Save(audioBytes)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(store) audio upload failed: %s", err.Error())))
+		log.Printf("store audio error: %v", err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse("failed to store audio"))
 		return
 	}
 
 	artist := &db.Artist{ID: trackArtistID}
 
 	ctx := c.Request.Context()
-	cacheClient, ok := ctx.Value("cacheClient").(cache.Cache)
+	cacheClient, ok := ctx.Value(CacheContextKey).(cache.Cache)
 
 	artistCacheKey := fmt.Sprintf("artist-id-%s", trackArtistID)
 	if ok {
@@ -176,7 +183,8 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 
 	track, err := r.CreateTrack(c, trackTitle, trackArtistID, filePath, reqForm.Duration, reqForm.Thumbnail)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("(db) audio upload failed: %s", err.Error())))
+		log.Printf("create track error: %v", err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse("failed to save track"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -207,7 +215,8 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 
 	fileMetas, err := processFiles(reqForm.Files, reqForm.Titles)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
+		log.Printf("bulk process files error: %v", err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse("audio upload failed"))
 		return
 	}
 
@@ -222,7 +231,8 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 	rows, err := r.BulkCreateTracks(c, trackTitles, artistID, filteredFileNames)
 
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(fmt.Sprintf("audio upload failed: %s", err.Error())))
+		log.Printf("bulk create tracks error: %v", err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse("audio upload failed"))
 		return
 	}
 
@@ -247,7 +257,9 @@ func processFiles(files []*multipart.FileHeader, titles []string) (map[string]fs
 			continue
 		}
 		audioBytes := make([]byte, file.Size)
-		if _, readErr := audioFile.Read(audioBytes); readErr != nil {
+		_, readErr := io.ReadFull(audioFile, audioBytes)
+		_ = audioFile.Close()
+		if readErr != nil {
 			groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: []byte{}})
 			continue
 		}
@@ -286,7 +298,6 @@ func TrackPlayHandler(c *gin.Context, r db.TrackRepo) {
 		return
 	}
 
-	// Increment the track's play count
 	if err := r.IncrementPlayCount(c, trackId); err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse("failed to record play"))
 		return

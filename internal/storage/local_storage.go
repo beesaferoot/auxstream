@@ -21,9 +21,9 @@ type LocalStore struct {
 func NewLocalStore(path string) *LocalStore {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		// Create the directory
-		err := os.Mkdir(path, 0744)
-		if err != nil {
+		// MkdirAll creates parent directories as needed and is a no-op if the
+		// path already exists, unlike Mkdir which fails when a parent is missing.
+		if err := os.MkdirAll(path, 0o755); err != nil {
 			log.Fatalln(err.Error())
 		}
 	}
@@ -47,11 +47,16 @@ func (l *LocalStore) Save(raw []byte) (filename string, err error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = file.Write(raw)
+	defer file.Close()
+
+	if _, err = file.Write(raw); err != nil {
+		return "", err
+	}
+
 	l.mu.Lock()
 	l.writes++
 	l.mu.Unlock()
-	return
+	return filename, nil
 }
 
 func (l *LocalStore) Read(fileName string) (file File, err error) {
@@ -123,6 +128,10 @@ func (f *LocalFile) Read(p []byte) (n int, err error) {
 
 func (f *LocalFile) Write(p []byte) (n int, err error) {
 	return f.content.Write(p)
+}
+
+func (f *LocalFile) Close() error {
+	return f.content.Close()
 }
 
 func (f *LocalFile) WriteAt(p []byte, off int64) (n int, err error) {

@@ -62,6 +62,7 @@ func NewServer(serverConfig ServerConfig) Server {
 		jwtService,
 		refreshService,
 		oauthService,
+		serverConfig.Cache,
 	)
 
 	youtubeClient := external.NewYouTubeClient(serverConfig.Conf.YouTubeAPIKey)
@@ -200,6 +201,8 @@ func (s *server) setupRouter() *gin.Engine {
 		})
 	}
 
+	// Deprecated: prefer POST /tracks and POST /tracks/bulk. These flat aliases
+	// are retained for backwards compatibility with existing clients.
 	v1.POST("/upload_track", s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 		handlers.AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
 	})
@@ -245,7 +248,7 @@ func (s *server) setupMockRouter() *gin.Engine {
 
 func injectCache(cache cache.Cache) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx := context.WithValue(c.Request.Context(), "cacheClient", cache)
+		ctx := context.WithValue(c.Request.Context(), handlers.CacheContextKey, cache)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}

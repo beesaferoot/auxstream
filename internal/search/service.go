@@ -192,10 +192,12 @@ func (s *Service) InvalidateCache(query, source string, maxResults int) error {
 	return s.cache.Del(cacheKey)
 }
 
-// ClearAllCache clears all search cache (useful for maintenance)
+// ClearAllCache clears all search cache (useful for maintenance).
+//
+// Not yet implemented: it returns an error rather than nil so callers don't
+// mistake a no-op for a successful purge.
 func (s *Service) ClearAllCache(ctx context.Context) error {
-	//TODO: implement properly cache purging
-	return nil
+	return fmt.Errorf("search cache purging not implemented")
 }
 
 // GetCacheStats returns cache statistics for a query

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"auxstream/internal/db"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +23,8 @@ func CreateArtistHandler(c *gin.Context, r db.ArtistRepo) {
 
 	artist, err := r.CreateArtist(c, req.Name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
+		log.Printf("CreateArtist error: %v", err)
+		c.JSON(http.StatusInternalServerError, errorResponse("failed to create artist"))
 		return
 	}
 
@@ -87,7 +89,8 @@ func GetArtistTracksHandler(c *gin.Context, trackRepo db.TrackRepo, artistRepo d
 
 	tracks, err := trackRepo.GetTracksByArtistId(c, artistId, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
+		log.Printf("GetTracksByArtistId error: %v", err)
+		c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch tracks"))
 		return
 	}
 

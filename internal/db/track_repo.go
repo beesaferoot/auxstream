@@ -124,6 +124,10 @@ func (r *trackRepo) GetTrackByID(ctx context.Context, id uuid.UUID) (*Track, err
 	return &track, nil
 }
 
+// SearchTracks performs a combined title/artist fuzzy search. It is the
+// intended single entry point for local search (see .todo: search feature is
+// still being developed) and currently complements the aggregator's per-field
+// lookups.
 func (r *trackRepo) SearchTracks(ctx context.Context, query string) ([]*Track, error) {
 	var tracks []*Track
 

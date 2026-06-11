@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"auxstream/internal/search"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -33,7 +34,8 @@ func SearchHandler(c *gin.Context, searchService *search.Service) {
 
 	results, err := searchService.Search(c.Request.Context(), searchReq)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errorResponse(err.Error()))
+		log.Printf("search error: %v", err)
+		c.JSON(http.StatusInternalServerError, errorResponse("search failed"))
 		return
 	}
 

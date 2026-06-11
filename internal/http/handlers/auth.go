@@ -2,29 +2,44 @@ package handlers
 
 import (
 	"auxstream/internal/auth"
+	"auxstream/internal/cache"
 	"auxstream/internal/db"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
+// oauthStateTTL bounds how long a pending OAuth login may stay open before the
+// generated state token is rejected as stale.
+const oauthStateTTL = 10 * time.Minute
+
 type AuthService struct {
 	userRepo       db.UserRepo
 	jwtService     *auth.JWTService
 	refreshService *auth.RefreshTokenService
 	oauthService   *auth.OAuthService
+	cache          cache.Cache
 }
 
-func NewAuthService(userRepo db.UserRepo, jwtService *auth.JWTService, refreshService *auth.RefreshTokenService, oauthService *auth.OAuthService) *AuthService {
+func NewAuthService(userRepo db.UserRepo, jwtService *auth.JWTService, refreshService *auth.RefreshTokenService, oauthService *auth.OAuthService, cache cache.Cache) *AuthService {
 	return &AuthService{
 		userRepo:       userRepo,
 		jwtService:     jwtService,
 		refreshService: refreshService,
 		oauthService:   oauthService,
+		cache:          cache,
 	}
+}
+
+// accessTokenExpiresIn reports the access-token lifetime in seconds for token
+// responses, derived from the JWT service so it can never drift from reality.
+func (a *AuthService) accessTokenExpiresIn() int64 {
+	return int64(a.jwtService.AccessTokenTTL().Seconds())
 }
 
 type RegisterRequest struct {
@@ -100,7 +115,7 @@ func (a *AuthService) Register(c *gin.Context) {
 	response := TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    3600, // 1 hour in seconds
+		ExpiresIn:    a.accessTokenExpiresIn(),
 		TokenType:    "Bearer",
 	}
 
@@ -146,7 +161,7 @@ func (a *AuthService) Login(c *gin.Context) {
 	response := TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    3600, // 1 hour in seconds
+		ExpiresIn:    a.accessTokenExpiresIn(),
 		TokenType:    "Bearer",
 	}
 
@@ -196,7 +211,7 @@ func (a *AuthService) RefreshToken(c *gin.Context) {
 
 	response := TokenResponse{
 		AccessToken: accessToken,
-		ExpiresIn:   3600, // 1 hour in seconds
+		ExpiresIn:   a.accessTokenExpiresIn(),
 		TokenType:   "Bearer",
 	}
 
@@ -233,6 +248,15 @@ func (a *AuthService) Logout(c *gin.Context) {
 // GoogleAuth initiates the Google OAuth flow.
 func (a *AuthService) GoogleAuth(c *gin.Context) {
 	state := uuid.New().String()
+
+	// Persist the state so the callback can prove this request originated here,
+	// protecting the OAuth flow against CSRF.
+	if err := a.cache.Set(oauthStateKey(state), true, oauthStateTTL); err != nil {
+		log.Printf("store oauth state error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start authentication"})
+		return
+	}
+
 	authURL := a.oauthService.GetAuthURL(state)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -248,6 +272,20 @@ func (a *AuthService) GoogleCallback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code not provided"})
 		return
 	}
+
+	// Verify the state issued by GoogleAuth before trusting this callback.
+	state := c.Query("state")
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "State parameter not provided"})
+		return
+	}
+	exists, err := a.cache.Exists(c.Request.Context(), oauthStateKey(state))
+	if err != nil || !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired state"})
+		return
+	}
+	// State is single-use; consume it so it cannot be replayed.
+	_ = a.cache.Del(oauthStateKey(state))
 
 	token, err := a.oauthService.ExchangeCodeForToken(c.Request.Context(), code)
 	if err != nil {
@@ -287,7 +325,7 @@ func (a *AuthService) GoogleCallback(c *gin.Context) {
 	response := TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    3600, // 1 hour in seconds
+		ExpiresIn:    a.accessTokenExpiresIn(),
 		TokenType:    "Bearer",
 	}
 
@@ -295,6 +333,10 @@ func (a *AuthService) GoogleCallback(c *gin.Context) {
 		"message": "Google authentication successful",
 		"data":    response,
 	})
+}
+
+func oauthStateKey(state string) string {
+	return fmt.Sprintf("oauth_state:%s", state)
 }
 
 func hashPassword(password string) (string, error) {

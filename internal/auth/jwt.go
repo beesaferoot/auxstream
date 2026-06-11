@@ -29,6 +29,12 @@ func NewJWTService(secretKey string, accessTokenTTL, refreshTokenTTL time.Durati
 	}
 }
 
+// AccessTokenTTL returns the configured lifetime of access tokens, so callers
+// can report it without hardcoding a value that may drift from the real TTL.
+func (j *JWTService) AccessTokenTTL() time.Duration {
+	return j.accessTokenTTL
+}
+
 func (j *JWTService) GenerateAccessToken(userID uuid.UUID, email string) (string, error) {
 	claims := JWTClaims{
 		UserID: userID,
