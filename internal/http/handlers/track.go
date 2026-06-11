@@ -133,6 +133,11 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		return
 	}
 
+	if file.Size > MaxUploadBytes {
+		c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, errorResponse(fmt.Sprintf("audio exceeds the maximum allowed size of %d bytes", MaxUploadBytes)))
+		return
+	}
+
 	if !strings.HasSuffix(file.Filename, ".mp3") {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("invalid audio format use mp3 instead"))
 		return
@@ -149,6 +154,12 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 	audioBytes := make([]byte, file.Size)
 	if _, readErr := io.ReadFull(audioFile, audioBytes); readErr != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unable to read track audio"))
+		return
+	}
+
+	// Validate the bytes really are MP3, not just a .mp3-named file.
+	if !looksLikeMP3(audioBytes) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("file is not a valid mp3"))
 		return
 	}
 	filePath, err := fs.Store.Save(audioBytes)
@@ -213,23 +224,13 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 		return
 	}
 
-	fileMetas, err := processFiles(reqForm.Files, reqForm.Titles)
-	if err != nil {
-		log.Printf("bulk process files error: %v", err)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse("audio upload failed"))
+	inputs := processFiles(reqForm.Files, reqForm.Titles)
+	if len(inputs) == 0 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("no valid mp3 files within the size limit were uploaded"))
 		return
 	}
 
-	var trackTitles []string
-	filteredFileNames := map[string]string{}
-	for title, fileMeta := range fileMetas {
-		if fileMeta.Name != "" {
-			trackTitles = append(trackTitles, title)
-			filteredFileNames[title] = fileMeta.Name
-		}
-	}
-	rows, err := r.BulkCreateTracks(c, trackTitles, artistID, filteredFileNames)
-
+	rows, err := r.BulkCreateTracks(c, inputs, artistID)
 	if err != nil {
 		log.Printf("bulk create tracks error: %v", err)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse("audio upload failed"))
@@ -238,45 +239,67 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": map[string]any{
-			"saved": filteredFileNames,
+			"saved": inputs,
 			"rows":  rows,
 		},
 	})
 }
 
-func processFiles(files []*multipart.FileHeader, titles []string) (map[string]fs.FileMeta, error) {
-	var groupFiles []fs.FileMeta
-	groupTitles := map[string]string{}
+// processFiles reads, validates, and stores each uploaded file, returning one
+// entry per successfully saved track. Each file's title is carried by position
+// in the request, so duplicate filenames or titles never collapse onto one
+// another (the previous filename-keyed map silently dropped such uploads).
+func processFiles(files []*multipart.FileHeader, titles []string) []db.BulkTrackInput {
+	var toSave []fs.FileMeta
 
 	for idx, file := range files {
-		groupTitles[file.Filename] = titles[idx]
+		if idx >= len(titles) {
+			break // no matching title for this file; ignore the extra
+		}
+
+		if file.Size <= 0 || file.Size > MaxUploadBytes {
+			log.Printf("bulk skip file %q: size %d out of bounds", file.Filename, file.Size)
+			continue
+		}
 
 		audioFile, fileErr := file.Open()
 		if fileErr != nil {
-			groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: []byte{}})
+			log.Printf("bulk open file %q: %v", file.Filename, fileErr)
 			continue
 		}
 		audioBytes := make([]byte, file.Size)
 		_, readErr := io.ReadFull(audioFile, audioBytes)
 		_ = audioFile.Close()
 		if readErr != nil {
-			groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: []byte{}})
+			log.Printf("bulk read file %q: %v", file.Filename, readErr)
 			continue
 		}
-		groupFiles = append(groupFiles, fs.FileMeta{AudioTitle: file.Filename, Content: audioBytes})
-	}
-
-	resultCh := make(chan fs.FileMeta, len(groupFiles))
-	fs.Store.BulkSave(resultCh, groupFiles)
-
-	fileMeta := map[string]fs.FileMeta{}
-	for fmeta := range resultCh {
-		if fmeta.Name != "" {
-			fileMeta[groupTitles[fmeta.AudioTitle]] = fmeta
+		if !looksLikeMP3(audioBytes) {
+			log.Printf("bulk reject file %q: not a valid mp3", file.Filename)
+			continue
 		}
+
+		// Carry the track title (not the filename) so results stay correlated
+		// even when two files share a name.
+		toSave = append(toSave, fs.FileMeta{AudioTitle: titles[idx], Content: audioBytes})
 	}
 
-	return fileMeta, nil
+	if len(toSave) == 0 {
+		return nil
+	}
+
+	resultCh := make(chan fs.FileMeta, len(toSave))
+	fs.Store.BulkSave(resultCh, toSave)
+
+	inputs := make([]db.BulkTrackInput, 0, len(toSave))
+	for meta := range resultCh {
+		if meta.Name == "" {
+			continue
+		}
+		inputs = append(inputs, db.BulkTrackInput{Title: meta.AudioTitle, File: meta.Name})
+	}
+
+	return inputs
 }
 
 type TrackPlayRequest struct {

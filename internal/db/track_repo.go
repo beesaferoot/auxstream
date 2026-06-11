@@ -20,7 +20,7 @@ type TrackRepo interface {
 	GetTrackByArtist(ctx context.Context, artist string) ([]*Track, error)
 	GetTracksByArtistId(ctx context.Context, artistId uuid.UUID, limit int, offset int) ([]*Track, error)
 	SearchTracks(ctx context.Context, query string) ([]*Track, error)
-	BulkCreateTracks(ctx context.Context, trackTitles []string, artistId uuid.UUID, fileMetas map[string]string) (int64, error)
+	BulkCreateTracks(ctx context.Context, inputs []BulkTrackInput, artistId uuid.UUID) (int64, error)
 	IncrementPlayCount(ctx context.Context, trackId uuid.UUID) error
 	RecordPlayback(ctx context.Context, userId uuid.UUID, trackId uuid.UUID, durationPlayed int) error
 }
@@ -145,24 +145,33 @@ func (r *trackRepo) SearchTracks(ctx context.Context, query string) ([]*Track, e
 	return tracks, nil
 }
 
-func (r *trackRepo) BulkCreateTracks(ctx context.Context, trackTitles []string, artistId uuid.UUID, fileNames map[string]string) (int64, error) {
-	var tracks []Track
+// BulkTrackInput is a single title/stored-file pair for a bulk upload. Using an
+// ordered slice (rather than a title-keyed map) preserves every track even when
+// titles repeat.
+type BulkTrackInput struct {
+	Title string `json:"title"`
+	File  string `json:"file"`
+}
 
-	logger.Info("bulk create tracks", []zap.Field{
-		zap.String("artist_id", artistId.String()),
-		zap.Strings("track_titles", trackTitles),
-		zap.Any("file_names", fileNames),
-	}...)
+func (r *trackRepo) BulkCreateTracks(ctx context.Context, inputs []BulkTrackInput, artistId uuid.UUID) (int64, error) {
+	if len(inputs) == 0 {
+		return 0, nil
+	}
 
-	for _, title := range trackTitles {
-		fileName, _ := fileNames[title]
+	tracks := make([]Track, 0, len(inputs))
+	for _, in := range inputs {
 		tracks = append(tracks, Track{
-			Title:    title,
-			ArtistID: artistId,
 			ID:       uuid.New(),
-			File:     fileName,
+			Title:    in.Title,
+			ArtistID: artistId,
+			File:     in.File,
 		})
 	}
+
+	logger.Info("bulk create tracks",
+		zap.String("artist_id", artistId.String()),
+		zap.Int("count", len(tracks)),
+	)
 
 	res := r.Db.WithContext(ctx).CreateInBatches(tracks, 100)
 

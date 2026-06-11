@@ -76,6 +76,10 @@ func NewServer(serverConfig ServerConfig) Server {
 		Window:      time.Minute,
 	})
 
+	if serverConfig.Conf.MaxUploadBytes > 0 {
+		handlers.MaxUploadBytes = serverConfig.Conf.MaxUploadBytes
+	}
+
 	return &server{
 		db:            serverConfig.DB,
 		cache:         serverConfig.Cache,
