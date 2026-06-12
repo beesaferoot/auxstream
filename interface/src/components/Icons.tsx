@@ -23,15 +23,7 @@ const svgBase = (size: number, className?: string) => ({
   className,
 })
 
-export const LogoGlyph = ({ size = 22, className }: IconProps) => (
-  <svg {...svgBase(size, className)} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 18V6l10-2v12" />
-    <circle cx="6" cy="18" r="2.6" fill="currentColor" stroke="none" />
-    <circle cx="16" cy="16" r="2.6" fill="currentColor" stroke="none" />
-  </svg>
-)
-
-export const FeedIcon = ({ size = 22, className, strokeWidth = 2 }: IconProps) => (
+export const FeedIcon =({ size = 22, className, strokeWidth = 2 }: IconProps) => (
   <svg {...svgBase(size, className)} {...stroke(strokeWidth)}>
     <rect x="3.5" y="3.5" width="7" height="7" rx="2" />
     <rect x="13.5" y="3.5" width="7" height="7" rx="2" />

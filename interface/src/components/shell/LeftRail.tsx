@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useUI } from '../../context/UIContext'
-import { FeedIcon, SearchIcon, LibraryIcon, LogoGlyph } from '../Icons'
+import { FeedIcon, SearchIcon, LibraryIcon } from '../Icons'
 import AccountMenu from './AccountMenu'
 
 const NAV = [
@@ -23,9 +23,11 @@ const LeftRail = () => {
   return (
     <div className="relative z-[50] flex flex-col items-center gap-2 bg-ink py-[22px]">
       {/* Logo tile */}
-      <div className="mb-[18px] flex h-[42px] w-[42px] items-center justify-center rounded-tile bg-lime text-ink shadow-logo">
-        <LogoGlyph size={22} />
-      </div>
+      <img
+        src="/logo.svg"
+        alt="AuxStream"
+        className="mb-[18px] h-[42px] w-[42px] rounded-tile shadow-logo"
+      />
 
       {NAV.map(({ to, label, Icon, end }) => {
         const active = isActive(to, end)

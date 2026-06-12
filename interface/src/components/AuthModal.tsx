@@ -3,7 +3,6 @@ import { login as apiLogin, register as apiRegister } from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { useUI } from '../context/UIContext'
 import { useToast } from './ui/Toast'
-import { LogoGlyph } from './Icons'
 
 const fieldClass =
   'w-full rounded-xl border-[1.5px] border-line bg-[#fbfcf6] px-3.5 py-3 text-[16px] text-ink-text outline-none transition-colors focus:border-lime focus:bg-white'
@@ -91,9 +90,11 @@ const AuthModal = () => {
     >
       <div className="w-[min(424px,94vw)] animate-aux-spin-in rounded-hero border-[1.5px] border-[#ece9dc] bg-[#fffdf9] p-[36px_34px] shadow-modal">
         <div className="mb-[26px] flex items-center gap-2.5">
-          <div className="flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-lime text-ink shadow-[0_6px_16px_rgba(182,240,60,.35)]">
-            <LogoGlyph size={20} />
-          </div>
+          <img
+            src="/logo.svg"
+            alt="AuxStream"
+            className="h-[38px] w-[38px] rounded-xl shadow-[0_6px_16px_rgba(182,240,60,.35)]"
+          />
           <span className="font-display text-[21px] font-extrabold tracking-[-.4px]">auxstream</span>
         </div>
 
