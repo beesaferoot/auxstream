@@ -16,6 +16,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// main runs the catalog indexer either as a one-shot job (-once) or as a
+// long-lived worker that re-indexes on a fixed interval until it receives
+// SIGINT/SIGTERM.
 func main() {
 	intervalHours := flag.Int("interval", 24, "Indexing interval in hours")
 	configPath := flag.String("config", ".", "Path to config directory")
@@ -45,6 +48,8 @@ func main() {
 		Addr: conf.RedisAddr,
 	})
 
+	// Probe Redis up front so a misconfigured cache fails fast at startup
+	// rather than mid-indexing.
 	if _, err := redisCache.Exists(context.Background(), "test_connection"); err != nil {
 		logger.Fatal("Failed to connect to Redis", zap.Error(err))
 	}
@@ -82,7 +87,8 @@ func main() {
 	logger.Info("Received shutdown signal, stopping worker...")
 	cancel()
 
-	// Give the worker some time to finish
+	// Brief grace period for the cancelled worker to unwind in-flight work
+	// before the process exits.
 	time.Sleep(2 * time.Second)
 	logger.Info("Indexer worker stopped")
 }

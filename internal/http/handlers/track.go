@@ -16,7 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetTrackByIDHandler fetches a single track by ID
+// GetTrackByIDHandler reads the track id from the URL path; responds 400 on a
+// malformed UUID and 404 when no such track exists.
 func GetTrackByIDHandler(c *gin.Context, r db.TrackRepo) {
 	trackIdStr := c.Param("id")
 	trackId, err := uuid.Parse(trackIdStr)
@@ -36,7 +37,8 @@ func GetTrackByIDHandler(c *gin.Context, r db.TrackRepo) {
 	})
 }
 
-// FetchTracksByArtistHandler fetch tracks by artist (limit results < 100)
+// FetchTracksByArtistHandler matches on the "artist" query string (the repo caps
+// results below 100). An empty query is passed through, not rejected.
 func FetchTracksByArtistHandler(c *gin.Context, r db.TrackRepo) {
 	artist := c.Query("artist")
 	tracks, err := r.GetTrackByArtist(c, artist)
@@ -59,7 +61,9 @@ type FetchTrackQueryParams struct {
 	Days     int    `form:"days"` // For trending within last N days (0 = all time)
 }
 
-// FetchTracksHandler fetch paginated tracks with limit on page size and sorting options
+// FetchTracksHandler paginates via the pagesize/pagenumber query params. The
+// "sort" param selects trending or recent ordering (default is unordered); for
+// trending, "days" bounds the window and defaults to 30 when zero.
 func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 	var reqParams FetchTrackQueryParams
 
@@ -74,18 +78,16 @@ func FetchTracksHandler(c *gin.Context, r db.TrackRepo) {
 	var tracks []*db.Track
 	var err error
 
-	// Choose sorting method based on query parameter
 	switch reqParams.Sort {
 	case "trending":
 		days := reqParams.Days
 		if days == 0 {
-			days = 30 // Default to last 30 days for trending
+			days = 30 // trending window defaults to the last 30 days
 		}
 		tracks, err = r.GetTrendingTracks(c, limit, offset, days)
 	case "recent":
 		tracks, err = r.GetRecentTracks(c, limit, offset)
 	default:
-		// Default behavior - just get tracks (no special sorting)
 		tracks, err = r.GetTracks(c, limit, offset)
 	}
 
@@ -109,7 +111,11 @@ type AddTrackForm struct {
 	Thumbnail string                `form:"thumbnail"` // Optional: thumbnail URL or path
 }
 
-// AddTrackHandler add track to the system
+// AddTrackHandler ingests one track from a multipart form (title, artist_id,
+// audio, optional duration/thumbnail). The format is sniffed from the bytes, not
+// the filename, and rejected if unsupported; uploads over MaxUploadBytes get 413.
+// The artist is resolved from cache first, falling back to the repo (and 404 if
+// absent).
 func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 	var reqForm AddTrackForm
 	if err := c.ShouldBind(&reqForm); err != nil {
@@ -203,7 +209,9 @@ type BulkTrackUploadForm struct {
 	ArtistId string                  `form:"artist_id" binding:"required"`
 }
 
-// BulkTrackUploadHandler enables bulk track uploads
+// BulkTrackUploadHandler ingests parallel track_titles/track_files arrays
+// correlated by position. Files that are oversized or fail format sniffing are
+// silently skipped; a 400 results only when nothing valid remains.
 func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 	var reqForm BulkTrackUploadForm
 
@@ -302,7 +310,8 @@ type TrackPlayRequest struct {
 	DurationPlayed int    `json:"duration_played"` // Optional: how long the user listened (seconds)
 }
 
-// TrackPlayHandler records a track play/listen event
+// TrackPlayHandler always bumps the track's play count; it additionally records
+// per-user playback history only when the request carries an authenticated user.
 func TrackPlayHandler(c *gin.Context, r db.TrackRepo) {
 	var req TrackPlayRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -321,13 +330,12 @@ func TrackPlayHandler(c *gin.Context, r db.TrackRepo) {
 		return
 	}
 
-	// Optionally record in playback history if user is authenticated
 	userIdValue, exists := c.Get("user_id")
 	if exists {
 		if userId, ok := userIdValue.(uuid.UUID); ok {
 			duration := req.DurationPlayed
 			if duration == 0 {
-				duration = 30 // Default minimum listening time
+				duration = 30 // assume 30s when the client omits a duration
 			}
 			_ = r.RecordPlayback(c, userId, trackId, duration)
 		}

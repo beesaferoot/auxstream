@@ -13,7 +13,8 @@ type CreateArtistRequest struct {
 	Name string `json:"name" binding:"required"`
 }
 
-// CreateArtistHandler creates a new artist
+// CreateArtistHandler reads a JSON body with a required name and responds 201
+// with the created artist.
 func CreateArtistHandler(c *gin.Context, r db.ArtistRepo) {
 	var req CreateArtistRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -33,7 +34,8 @@ func CreateArtistHandler(c *gin.Context, r db.ArtistRepo) {
 	})
 }
 
-// GetArtistByIdHandler fetches an artist by ID
+// GetArtistByIdHandler reads the id from the URL path; 400 on a malformed UUID
+// and 404 when the artist is absent.
 func GetArtistByIdHandler(c *gin.Context, r db.ArtistRepo) {
 	artistIdStr := c.Param("id")
 	artistId, err := uuid.Parse(artistIdStr)
@@ -58,7 +60,9 @@ type GetArtistTracksQueryParams struct {
 	PageNum  int `form:"pagenumber" binding:"gte=1"`
 }
 
-// GetArtistTracksHandler fetches all tracks for an artist with pagination
+// GetArtistTracksHandler pages an artist's tracks (pagesize/pagenumber query
+// params, defaulting to 20/1). The artist id comes from the path; a missing
+// artist yields 404 before any track lookup.
 func GetArtistTracksHandler(c *gin.Context, trackRepo db.TrackRepo, artistRepo db.ArtistRepo) {
 	artistIdStr := c.Param("id")
 	artistId, err := uuid.Parse(artistIdStr)
@@ -67,15 +71,14 @@ func GetArtistTracksHandler(c *gin.Context, trackRepo db.TrackRepo, artistRepo d
 		return
 	}
 
-	// Verify artist exists
 	_, err = artistRepo.GetArtistById(c, artistId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, errorResponse("artist not found"))
 		return
 	}
 
+	// Seed defaults before binding; absent query params leave these in place.
 	var params GetArtistTracksQueryParams
-	// Set defaults
 	params.PageSize = 20
 	params.PageNum = 1
 

@@ -12,6 +12,9 @@ import (
 // the configured logger.
 var Log = zap.NewNop()
 
+// InitLogger builds the global logger; an environment with the "prod" prefix
+// gets JSON output with ISO8601 timestamps, anything else gets colored,
+// human-readable development output.
 func InitLogger(environment string) error {
 	var config zap.Config
 
@@ -36,6 +39,8 @@ func InitLogger(environment string) error {
 	return nil
 }
 
+// Sync flushes any buffered log entries; call it before exit (errors ignored,
+// as stdout/stderr sync can fail harmlessly on some platforms).
 func Sync() {
 	if Log != nil {
 		_ = Log.Sync()
@@ -58,6 +63,7 @@ func Error(msg string, fields ...zap.Field) {
 	Log.Error(msg, fields...)
 }
 
+// Fatal logs at fatal level and then calls os.Exit(1).
 func Fatal(msg string, fields ...zap.Field) {
 	Log.Fatal(msg, fields...)
 }

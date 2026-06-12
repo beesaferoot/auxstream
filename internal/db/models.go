@@ -28,7 +28,7 @@ type Track struct {
 	File      string         `json:"file" gorm:"not null"`
 	Duration  int            `json:"duration" gorm:"default:0"`
 	Thumbnail string         `json:"thumbnail" gorm:"type:text"`
-	PlayCount int            `json:"play_count" gorm:"default:0;index"` // Track popularity
+	PlayCount int            `json:"play_count" gorm:"default:0;index"` // indexed: used as the trending-sort key
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"deleted_at" gorm:"index"`
@@ -119,6 +119,8 @@ func (Artist) TableName() string {
 	return "auxstream.artists"
 }
 
+// ModelTypeRegistry maps a model's type name to a zero-value instance, letting
+// callers resolve a model from a string (e.g. for generic migration/seeding).
 var ModelTypeRegistry = map[string]any{
 	"User":            User{},
 	"Track":           Track{},

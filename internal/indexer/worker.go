@@ -22,6 +22,8 @@ type IndexerWorker struct {
 	urlLists map[string][]string
 }
 
+// ExternalSourcesConfig is the parsed config/ext_sources.yaml: source name to
+// the list of track URLs to index for it.
 type ExternalSourcesConfig struct {
 	Sources map[string][]string `yaml:"sources"`
 }
@@ -48,7 +50,7 @@ func (w *IndexerWorker) Start(ctx context.Context) {
 		zap.Duration("interval", w.interval),
 	)
 
-	// Initial indexing before the first tick
+	// Index once up front so data is available before the first tick elapses.
 	w.runIndexing(ctx)
 
 	ticker := time.NewTicker(w.interval)
@@ -57,7 +59,8 @@ func (w *IndexerWorker) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			// Optional jitter to prevent sync workloads
+			// Random delay so multiple worker instances don't hammer the
+			// external sources in lockstep on the same tick.
 			time.Sleep(time.Duration(rand.Intn(2000)) * time.Millisecond)
 			w.runIndexing(ctx)
 		case <-ctx.Done():
@@ -72,14 +75,18 @@ func (w *IndexerWorker) RunIndexingOnce(ctx context.Context) {
 	w.runIndexing(ctx)
 }
 
-// runIndexing concurrently processes all URL lists.
+// runIndexing indexes every source concurrently, one goroutine per source, and
+// blocks until all finish. A panic in one source is recovered so it can't take
+// down the others.
 func (w *IndexerWorker) runIndexing(ctx context.Context) {
 	start := time.Now()
 
+	// Snapshot under the lock so AddURLList calls during the job can't mutate
+	// the slices the goroutines below iterate.
 	w.mu.RLock()
 	sources := make(map[string][]string, len(w.urlLists))
 	for k, v := range w.urlLists {
-		sources[k] = append([]string(nil), v...) // copy slice
+		sources[k] = append([]string(nil), v...)
 	}
 	w.mu.RUnlock()
 

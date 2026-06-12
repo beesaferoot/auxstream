@@ -12,6 +12,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// main wires up dependencies in order — config, database, cache, file store —
+// then runs the HTTP server, which blocks until shutdown.
 func main() {
 	conf, err := config.LoadConfig(".")
 	if err != nil {

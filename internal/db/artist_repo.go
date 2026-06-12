@@ -22,10 +22,11 @@ func NewArtistRepo(db *gorm.DB) ArtistRepo {
 	}
 }
 
+// CreateArtist returns the existing artist with this name, or creates one if
+// none exists; it never produces a duplicate, so it is safe to call per upload.
 func (r *artistRepo) CreateArtist(ctx context.Context, name string) (*Artist, error) {
 	artist := &Artist{}
 
-	// Use GORM's FirstOrCreate to handle the "ON CONFLICT DO NOTHING" logic
 	res := r.Db.WithContext(ctx).Where("name = ?", name).
 		Attrs(Artist{ID: uuid.New(), Name: name}).
 		FirstOrCreate(artist)

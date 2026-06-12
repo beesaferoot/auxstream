@@ -172,6 +172,8 @@ func RecordStreamTokenValidation(valid bool) {
 	StreamTokensValidated.WithLabelValues(result).Inc()
 }
 
+// RecordIndexerJob records a completed job under the aggregate "all" source
+// label; use RecordIndexerJobSource to break the same counts down per source.
 func RecordIndexerJob(duration float64, successCount, failCount int) {
 	IndexerJobsTotal.Inc()
 	IndexerJobDuration.Observe(duration)

@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// IndexingService scrapes track URLs and caches both the per-URL metadata and a
+// per-source search index built from it.
 type IndexingService struct {
 	registry *ScraperRegistry
 	cache    cache.Cache
@@ -24,6 +26,9 @@ func NewIndexingService(cache cache.Cache) *IndexingService {
 	}
 }
 
+// IndexURL scrapes a single URL and caches the result, returning the cached
+// copy on a hit without re-scraping. On success it also adds the track to the
+// per-source search index so SearchIndexedTracks can find it.
 func (s *IndexingService) IndexURL(ctx context.Context, url string) (*ScrapedMetadata, error) {
 	cacheKey := fmt.Sprintf("indexed_track:%s", url)
 	var cachedMetadata ScrapedMetadata
@@ -60,6 +65,8 @@ func (s *IndexingService) IndexURL(ctx context.Context, url string) (*ScrapedMet
 	return metadata, nil
 }
 
+// IndexBatch indexes urls sequentially and returns (succeeded, failed) counts;
+// a failure on one URL does not stop the rest.
 func (s *IndexingService) IndexBatch(ctx context.Context, urls []string) (int, int) {
 	successCount := 0
 	failCount := 0
@@ -75,6 +82,9 @@ func (s *IndexingService) IndexBatch(ctx context.Context, urls []string) (int, i
 	return successCount, failCount
 }
 
+// cacheInSearchIndex prepends the track to its source's cached list so the
+// newest tracks rank first, capping the list at 1000 to bound memory and
+// dropping the oldest entries beyond that.
 func (s *IndexingService) cacheInSearchIndex(metadata *ScrapedMetadata) {
 	searchKey := fmt.Sprintf("indexed_search_all:%s", metadata.Source)
 
@@ -90,6 +100,8 @@ func (s *IndexingService) cacheInSearchIndex(metadata *ScrapedMetadata) {
 	_ = s.cache.Set(searchKey, &existingTracks, 24*time.Hour)
 }
 
+// GetIndexedTracks returns up to limit most-recently-indexed tracks for source.
+// A cache miss yields an empty slice and nil error, not a failure.
 func (s *IndexingService) GetIndexedTracks(source string, limit int) ([]*ScrapedMetadata, error) {
 	searchKey := fmt.Sprintf("indexed_search_all:%s", source)
 
@@ -105,6 +117,8 @@ func (s *IndexingService) GetIndexedTracks(source string, limit int) ([]*Scraped
 	return tracks, nil
 }
 
+// SearchIndexedTracks does a case-insensitive substring match on title and
+// artist over the cached tracks for source, returning at most limit hits.
 func (s *IndexingService) SearchIndexedTracks(source, query string, limit int) []*ScrapedMetadata {
 	searchKey := fmt.Sprintf("indexed_search_all:%s", source)
 

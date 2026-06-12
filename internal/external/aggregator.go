@@ -39,7 +39,12 @@ func NewAggregator(youtubeClient *YouTubeClient, soundcloudClient *SoundCloudCli
 	}
 }
 
-// Search performs a unified search across all available sources
+// Search queries every configured source concurrently and merges the results,
+// truncated to maxResults. maxResults is divided evenly across the available
+// sources (local plus whichever external clients are configured), with a floor
+// of 5 per source. A failure in any one source is logged and skipped, not
+// returned, so partial results are normal; the error is non-nil only for a
+// systemic failure.
 func (a *Aggregator) Search(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
 	var (
 		wg      sync.WaitGroup
@@ -55,6 +60,8 @@ func (a *Aggregator) Search(ctx context.Context, query string, maxResults int) (
 		availableSources++
 	}
 
+	// Floor each source at 5 so that with many sources no single one is starved
+	// down to a useless handful; the final slice is still capped at maxResults.
 	resultsPerSource := maxResults / availableSources
 	if resultsPerSource < 5 {
 		resultsPerSource = 5
@@ -112,6 +119,9 @@ func (a *Aggregator) Search(ctx context.Context, query string, maxResults int) (
 	return results, nil
 }
 
+// searchLocal matches query against both title and artist in the local DB and
+// merges the two result sets. A title-lookup failure aborts; an artist-lookup
+// failure is tolerated (title hits alone are still useful).
 func (a *Aggregator) searchLocal(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
 	tracks, err := a.trackRepo.GetTrackByTitle(ctx, query)
 	if err != nil {
@@ -125,6 +135,7 @@ func (a *Aggregator) searchLocal(ctx context.Context, query string, maxResults i
 		tracks = append(tracks, artistTracks...)
 	}
 
+	// Dedup by ID: a track matching both title and artist appears in both sets.
 	seen := make(map[string]bool)
 	var uniqueTracks []*db.Track
 	for _, track := range tracks {
@@ -154,7 +165,8 @@ func (a *Aggregator) searchLocal(ctx context.Context, query string, maxResults i
 	return results, nil
 }
 
-// searchYouTube searches YouTube for tracks
+// searchYouTube queries the YouTube client and normalizes its results into the
+// unified SearchResult shape.
 func (a *Aggregator) searchYouTube(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
 	ytResults, err := a.youtubeClient.Search(ctx, query, maxResults)
 	if err != nil {
@@ -179,7 +191,8 @@ func (a *Aggregator) searchYouTube(ctx context.Context, query string, maxResults
 	return results, nil
 }
 
-// searchSoundCloud searches SoundCloud for tracks
+// searchSoundCloud queries the SoundCloud client and normalizes its results
+// into the unified SearchResult shape.
 func (a *Aggregator) searchSoundCloud(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
 	scResults, err := a.soundcloudClient.Search(ctx, query, maxResults)
 	if err != nil {
@@ -204,7 +217,9 @@ func (a *Aggregator) searchSoundCloud(ctx context.Context, query string, maxResu
 	return results, nil
 }
 
-// SearchBySource searches a specific source only
+// SearchBySource queries a single source ("local", "youtube", or "soundcloud").
+// Unlike Search it does not swallow failures: an unconfigured external source or
+// an unknown source name is returned as an error.
 func (a *Aggregator) SearchBySource(ctx context.Context, query string, source string, maxResults int) ([]SearchResult, error) {
 	switch source {
 	case "local":

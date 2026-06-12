@@ -14,7 +14,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// Service handles search operations with caching
+// Service fronts the external Aggregator with a read-through cache; identical
+// queries within cacheTTL are served from cache rather than re-hitting sources.
 type Service struct {
 	aggregator *external.Aggregator
 	cache      cache.Cache
@@ -34,20 +35,26 @@ type SearchResponse struct {
 	Results    []external.SearchResult `json:"results"`
 	TotalCount int                     `json:"total_count"`
 	Source     string                  `json:"source"`
-	CachedAt   *time.Time              `json:"cached_at,omitempty"`
+	CachedAt   *time.Time              `json:"cached_at,omitempty"` // set only when served from cache; nil on a fresh search
 	SearchedAt time.Time               `json:"searched_at"`
 }
 
-// NewService creates a new search service
+// NewService wires the aggregator and cache together. Pass a nil cache to
+// disable caching entirely; the service then queries sources on every call.
 func NewService(aggregator *external.Aggregator, cache cache.Cache) *Service {
 	return &Service{
 		aggregator: aggregator,
 		cache:      cache,
-		cacheTTL:   24 * time.Hour, // Cache search results for 1 day
+		// Catalogs change slowly, so a day-long TTL trades freshness for far
+		// fewer external API calls (which are rate-limited and/or billed).
+		cacheTTL: 24 * time.Hour,
 	}
 }
 
-// Search performs a search with caching
+// Search returns results for req, serving from cache on a hit and otherwise
+// querying the aggregator and caching the response. An empty req.Source fans
+// out to all sources; a cache miss is not an error. The returned response has
+// CachedAt set only when it came from cache.
 func (s *Service) Search(ctx context.Context, req SearchRequest) (*SearchResponse, error) {
 	startTime := time.Now()
 	normalizedQuery := normalizeQuery(req.Query)
@@ -132,7 +139,8 @@ func (s *Service) Search(ctx context.Context, req SearchRequest) (*SearchRespons
 	return response, nil
 }
 
-// getFromCache retrieves search results from cache
+// getFromCache returns the cached response, stamping CachedAt so callers can
+// distinguish a cache hit from a fresh search. A miss surfaces as an error.
 func (s *Service) getFromCache(cacheKey string) (*SearchResponse, error) {
 	resultJSON, err := s.cache.GetString(cacheKey)
 	if err != nil {
@@ -144,14 +152,12 @@ func (s *Service) getFromCache(cacheKey string) (*SearchResponse, error) {
 		return nil, err
 	}
 
-	// Set the cached timestamp
 	now := time.Now()
 	response.CachedAt = &now
 
 	return &response, nil
 }
 
-// cacheResults stores search results in cache
 func (s *Service) cacheResults(cacheKey string, response *SearchResponse) error {
 	resultJSON, err := json.Marshal(response)
 	if err != nil {
@@ -161,7 +167,10 @@ func (s *Service) cacheResults(cacheKey string, response *SearchResponse) error 
 	return s.cache.SetString(cacheKey, string(resultJSON), s.cacheTTL)
 }
 
-// generateCacheKey creates a cache key for the search
+// generateCacheKey builds the key from source, query, and maxResults. Empty
+// source maps to "all" so it matches the fan-out path, and maxResults is part
+// of the key because a request for more results is not satisfiable from a
+// smaller cached set.
 func (s *Service) generateCacheKey(query, source string, maxResults int) string {
 	if source == "" {
 		source = "all"
@@ -169,7 +178,8 @@ func (s *Service) generateCacheKey(query, source string, maxResults int) string 
 	return fmt.Sprintf("search:%s:%s:%d", source, query, maxResults)
 }
 
-// normalizeQuery normalizes a search query for consistent caching
+// normalizeQuery lowercases and collapses whitespace so that queries differing
+// only in case or spacing share one cache entry.
 func normalizeQuery(query string) string {
 	query = strings.ToLower(query)
 
@@ -180,7 +190,8 @@ func normalizeQuery(query string) string {
 	return query
 }
 
-// InvalidateCache removes cached results for a specific query
+// InvalidateCache drops the entry for exactly this query/source/maxResults
+// triple; other variants of the same query remain cached. No-op without a cache.
 func (s *Service) InvalidateCache(query, source string, maxResults int) error {
 	if s.cache == nil {
 		return nil
@@ -200,7 +211,8 @@ func (s *Service) ClearAllCache(ctx context.Context) error {
 	return fmt.Errorf("search cache purging not implemented")
 }
 
-// GetCacheStats returns cache statistics for a query
+// GetCacheStats reports whether this query is cached and, if so, its remaining
+// TTL. Without a cache configured it reports (false, 0, nil).
 func (s *Service) GetCacheStats(ctx context.Context, query, source string, maxResults int) (bool, time.Duration, error) {
 	if s.cache == nil {
 		return false, 0, nil

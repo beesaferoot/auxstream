@@ -110,6 +110,8 @@ type createPlaylistRequest struct {
 	IsPublic    bool   `json:"is_public"`
 }
 
+// CreatePlaylistHandler creates a playlist owned by the authenticated caller from
+// a JSON body (name required); responds 201.
 func CreatePlaylistHandler(c *gin.Context, r db.PlaylistRepo) {
 	userID, ok := currentUserID(c)
 	if !ok {
@@ -170,6 +172,8 @@ type updatePlaylistRequest struct {
 	IsPublic    bool   `json:"is_public"`
 }
 
+// UpdatePlaylistHandler replaces a playlist's fields from a JSON body. Restricted
+// to the owner; non-owners and unknown ids alike get 404.
 func UpdatePlaylistHandler(c *gin.Context, r db.PlaylistRepo) {
 	p, ok := ownedPlaylistOr404(c, r)
 	if !ok {
@@ -191,6 +195,7 @@ func UpdatePlaylistHandler(c *gin.Context, r db.PlaylistRepo) {
 	c.JSON(http.StatusOK, gin.H{"data": toPlaylistResponse(updated, int64(len(tracks)))})
 }
 
+// DeletePlaylistHandler deletes an owned playlist; non-owners and unknown ids get 404.
 func DeletePlaylistHandler(c *gin.Context, r db.PlaylistRepo) {
 	p, ok := ownedPlaylistOr404(c, r)
 	if !ok {
@@ -208,6 +213,8 @@ type addTrackRequest struct {
 	TrackID string `json:"track_id" binding:"required"`
 }
 
+// AddTrackToPlaylistHandler appends a track (track_id in the JSON body) to an
+// owned playlist. The track must exist (else 404), as must the playlist.
 func AddTrackToPlaylistHandler(c *gin.Context, r db.PlaylistRepo, trackRepo db.TrackRepo) {
 	p, ok := ownedPlaylistOr404(c, r)
 	if !ok {
@@ -235,6 +242,8 @@ func AddTrackToPlaylistHandler(c *gin.Context, r db.PlaylistRepo, trackRepo db.T
 	c.JSON(http.StatusOK, gin.H{"message": "track added"})
 }
 
+// RemoveTrackHandler drops the track named by the trackId path param from an
+// owned playlist.
 func RemoveTrackHandler(c *gin.Context, r db.PlaylistRepo) {
 	p, ok := ownedPlaylistOr404(c, r)
 	if !ok {
@@ -257,6 +266,9 @@ type reorderTracksRequest struct {
 	TrackIDs []string `json:"track_ids" binding:"required"`
 }
 
+// ReorderTracksHandler sets a playlist's track order from the track_ids body
+// array, which is expected to be the full ordering. Owner only; any unparseable
+// id rejects the whole request with 400.
 func ReorderTracksHandler(c *gin.Context, r db.PlaylistRepo) {
 	p, ok := ownedPlaylistOr404(c, r)
 	if !ok {

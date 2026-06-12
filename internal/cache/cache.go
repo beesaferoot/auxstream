@@ -9,14 +9,21 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Cache is a key-value store with expiry, set, and counter operations.
+// The any-typed and string-typed accessors are not interchangeable: Set/Get
+// round-trip values as JSON, whereas SetString/GetString store the raw bytes,
+// so a key written by one pair cannot be read back by the other.
 type Cache interface {
+	// Set stores value as JSON under key, expiring after exp (zero means no expiry).
 	Set(key string, value any, exp time.Duration) error
 	SetString(key string, value string, exp time.Duration) error
+	// Get reads the JSON at key and unmarshals it into value, which must be a pointer.
 	Get(key string, value any) error
 	GetString(key string) (string, error)
 	Del(key string) error
 	Exists(ctx context.Context, key string) (bool, error)
 	Expire(ctx context.Context, key string, exp time.Duration) error
+	// TTL reports the remaining lifetime of key at millisecond precision.
 	TTL(ctx context.Context, key string) (time.Duration, error)
 
 	// Collection helpers
@@ -29,10 +36,14 @@ type Cache interface {
 	Decr(ctx context.Context, key string) (int64, error)
 }
 
+// Redis is the go-redis backed Cache. Its methods that take no context use a
+// background context internally.
 type Redis struct {
 	client *redis.Client
 }
 
+// NewRedis returns a Redis using a client built from opts; it does not dial until
+// the first operation, so a bad address surfaces as an error there, not here.
 func NewRedis(opts *redis.Options) *Redis {
 	return &Redis{client: redis.NewClient(opts)}
 }

@@ -1,15 +1,20 @@
 package indexer
 
+// IndexerAdapter exposes the indexing service to callers that must not depend on
+// the indexer's internal ScrapedMetadata type, mapping results to IndexedTrackResult.
 type IndexerAdapter struct {
 	service *IndexingService
 }
 
+// NewIndexerAdapter wraps an IndexingService.
 func NewIndexerAdapter(service *IndexingService) *IndexerAdapter {
 	return &IndexerAdapter{
 		service: service,
 	}
 }
 
+// IndexedTrackResult is the adapter's source-agnostic view of an indexed track,
+// decoupling callers from the indexer's ScrapedMetadata.
 type IndexedTrackResult struct {
 	ID          string
 	Title       string

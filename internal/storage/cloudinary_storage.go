@@ -18,7 +18,10 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 )
 
-// CloudinaryStore implements FileSystem over Cloudinary object storage.
+// CloudinaryStore is a FileSystem backed by Cloudinary. Assets are uploaded as the
+// "video" resource type (Cloudinary's category for audio too). Save returns the
+// asset's secure HTTPS URL as the identifier, which Read fetches over HTTP. Remove,
+// however, expects the Cloudinary public ID rather than that URL.
 type CloudinaryStore struct {
 	cloudinaryInstance *cloudinary.Cloudinary
 	mu                 sync.Mutex
@@ -26,9 +29,9 @@ type CloudinaryStore struct {
 	downloads          int
 }
 
+// NewCloudinaryStore builds a store from a cloudinary:// URL carrying the cloud name
+// and API credentials (the same format as the CLOUDINARY_URL environment variable).
 func NewCloudinaryStore(url string) (*CloudinaryStore, error) {
-	// Start by creating a new instance of Cloudinary using CLOUDINARY_URL environment variable.
-	// Alternatively you can use cloudinary.NewFromParams() or cloudinary.NewFromURL().
 	cld, err := cloudinary.NewFromURL(url)
 	if err != nil {
 		return nil, err
@@ -59,6 +62,7 @@ func (cld *CloudinaryStore) Save(raw []byte, ext string) (filename string, err e
 		context.Background(),
 		freader,
 		uploader.UploadParams{
+			// Cloudinary public IDs carry no extension; it derives that from the asset.
 			PublicID:       strings.TrimSuffix(filename, "."+ext),
 			ResourceType:   "video",
 			UniqueFilename: api.Bool(false),
@@ -83,6 +87,8 @@ func (cld *CloudinaryStore) Read(locationURL string) (File, error) {
 	}
 	defer resp.Body.Close()
 
+	// Stream the fetched asset into a local temp file and return that as the File;
+	// the caller owns closing (and cleaning up) it.
 	file, err := NewFile(os.TempDir() + genFileName("tmp"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)

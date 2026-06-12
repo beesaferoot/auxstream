@@ -81,13 +81,14 @@ func NewYouTubeClient(apiKey string) *YouTubeClient {
 	}
 }
 
-// Search performs a search query on YouTube
+// Search returns up to maxResults music videos matching query. The search API
+// omits durations, so a second videos.list call fills them in; if that call
+// fails the search still succeeds with durations left at 0.
 func (y *YouTubeClient) Search(ctx context.Context, query string, maxResults int) ([]YouTubeSearchResult, error) {
 	if y.apiKey == "" {
 		return nil, fmt.Errorf("youtube API key not configured")
 	}
 
-	// Build the search URL
 	params := url.Values{}
 	params.Add("part", "snippet")
 	params.Add("q", query)
@@ -126,10 +127,9 @@ func (y *YouTubeClient) Search(ctx context.Context, query string, maxResults int
 		}
 	}
 
-	// Get video durations
 	durations, err := y.getVideoDurations(ctx, videoIDs)
 	if err != nil {
-		// Log error but don't fail the search
+		// Durations are best-effort; proceed with an empty map so results still return.
 		durations = make(map[string]int)
 	}
 
@@ -166,7 +166,9 @@ func (y *YouTubeClient) Search(ctx context.Context, query string, maxResults int
 	return results, nil
 }
 
-// getVideoDurations fetches duration information for multiple videos
+// getVideoDurations maps video IDs to durations in seconds via videos.list.
+// Requests are chunked to YouTube's 50-ID-per-call limit; a failed chunk is
+// skipped, so the returned map may omit some IDs rather than failing outright.
 func (y *YouTubeClient) getVideoDurations(ctx context.Context, videoIDs []string) (map[string]int, error) {
 	if len(videoIDs) == 0 {
 		return make(map[string]int), nil
@@ -174,6 +176,7 @@ func (y *YouTubeClient) getVideoDurations(ctx context.Context, videoIDs []string
 
 	durations := make(map[string]int)
 
+	// YouTube's videos.list accepts at most 50 IDs per request.
 	const batchSize = 50
 	for i := 0; i < len(videoIDs); i += batchSize {
 		end := i + batchSize
@@ -214,18 +217,17 @@ func (y *YouTubeClient) getVideoDurations(ctx context.Context, videoIDs []string
 	return durations, nil
 }
 
-// parseISO8601Duration converts ISO 8601 duration (PT1H2M3S) to seconds
+// parseISO8601Duration converts a YouTube ISO 8601 duration (e.g. PT1H2M3S) to
+// seconds. YouTube omits zero components (PT4M20S, PT45S), so when the full
+// pattern matches nothing we retry against the shorter shapes.
 func parseISO8601Duration(duration string) int {
-	// Simple parser for YouTube duration format: PT#H#M#S
 	var hours, minutes, seconds int
 	fmt.Sscanf(duration, "PT%dH%dM%dS", &hours, &minutes, &seconds)
 
-	// Try without hours
 	if hours == 0 && minutes == 0 && seconds == 0 {
 		fmt.Sscanf(duration, "PT%dM%dS", &minutes, &seconds)
 	}
 
-	// Try just seconds
 	if hours == 0 && minutes == 0 && seconds == 0 {
 		fmt.Sscanf(duration, "PT%dS", &seconds)
 	}

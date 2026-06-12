@@ -52,7 +52,8 @@ type RefreshTokenRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
-// Register handles user registration with email and password.
+// Register creates a user from a JSON email/password body (password min 6),
+// returning 409 if the email is taken and 201 with a fresh token pair otherwise.
 func (a *AuthService) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -113,7 +114,8 @@ func (a *AuthService) Register(c *gin.Context) {
 	})
 }
 
-// Login handles user login with email and password.
+// Login verifies a JSON email/password body and returns a token pair. Unknown
+// email and bad password are reported identically as 401 to avoid user enumeration.
 func (a *AuthService) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -159,7 +161,9 @@ func (a *AuthService) Login(c *gin.Context) {
 	})
 }
 
-// RefreshToken handles token refresh requests.
+// RefreshToken exchanges a valid, still-stored refresh token (JSON body) for a
+// new access token. The refresh token itself is not rotated. Any validation,
+// lookup, or unknown-user failure returns 401.
 func (a *AuthService) RefreshToken(c *gin.Context) {
 	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -209,7 +213,8 @@ func (a *AuthService) RefreshToken(c *gin.Context) {
 	})
 }
 
-// Logout handles user logout and token revocation.
+// Logout revokes the refresh token supplied in the JSON body, invalidating it
+// server-side; outstanding access tokens remain valid until they expire.
 func (a *AuthService) Logout(c *gin.Context) {
 	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

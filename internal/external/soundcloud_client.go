@@ -58,13 +58,14 @@ func NewSoundCloudClient(clientID string) *SoundCloudClient {
 	}
 }
 
-// Search performs a search query on SoundCloud
+// Search returns up to maxResults streamable tracks matching query, normalized
+// with durations in seconds and thumbnails upgraded to 500x500. Non-streamable
+// tracks are filtered out, so fewer than maxResults may come back.
 func (s *SoundCloudClient) Search(ctx context.Context, query string, maxResults int) ([]SoundCloudSearchResult, error) {
 	if s.clientID == "" {
 		return nil, fmt.Errorf("soundcloud client ID not configured")
 	}
 
-	// Build the search URL
 	params := url.Values{}
 	params.Add("q", query)
 	params.Add("client_id", s.clientID)
@@ -73,7 +74,6 @@ func (s *SoundCloudClient) Search(ctx context.Context, query string, maxResults 
 
 	searchURL := fmt.Sprintf("%s/tracks?%s", s.baseURL, params.Encode())
 
-	// Make the request
 	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -90,29 +90,25 @@ func (s *SoundCloudClient) Search(ctx context.Context, query string, maxResults 
 		return nil, fmt.Errorf("soundcloud API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse the response
 	var apiResp SoundCloudAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Convert to normalized results
 	var results []SoundCloudSearchResult
 	for _, track := range apiResp.Collection {
-		// Only include streamable tracks
+		// Skip non-streamable tracks: we can't play them, so they're noise.
 		if !track.Streamable {
 			continue
 		}
 
-		// Convert duration from milliseconds to seconds
+		// API reports duration in milliseconds; our model uses seconds.
 		durationSeconds := track.Duration / 1000
 
-		// Get thumbnail URL
 		thumbnail := track.ArtworkURL
 		if thumbnail == "" {
 			thumbnail = getDefaultSoundCloudThumbnail()
 		} else {
-			// SoundCloud returns small thumbnails by default, upgrade to large
 			thumbnail = upgradeSoundCloudThumbnail(thumbnail)
 		}
 
@@ -128,7 +124,8 @@ func (s *SoundCloudClient) Search(ctx context.Context, query string, maxResults 
 			Description: track.Description,
 		})
 
-		// Break if we have enough results
+		// Defensive cap: the API limit already bounds the collection, but enforce
+		// maxResults here too in case it returns more.
 		if len(results) >= maxResults {
 			break
 		}
@@ -137,7 +134,8 @@ func (s *SoundCloudClient) Search(ctx context.Context, query string, maxResults 
 	return results, nil
 }
 
-// GetTrack fetches a single track by ID
+// GetTrack fetches one track by SoundCloud ID, normalized like Search results.
+// Returns an error if the track is not streamable.
 func (s *SoundCloudClient) GetTrack(ctx context.Context, trackID string) (*SoundCloudSearchResult, error) {
 	if s.clientID == "" {
 		return nil, fmt.Errorf("soundcloud client ID not configured")
@@ -208,7 +206,9 @@ func (s *SoundCloudClient) GetTrack(ctx context.Context, trackID string) (*Sound
 	}, nil
 }
 
-// ResolveURL resolves a SoundCloud URL to track information
+// ResolveURL turns a public SoundCloud page URL into track metadata via the
+// /resolve endpoint. Errors if the URL resolves to something other than a track
+// (e.g. a user or playlist) or to a non-streamable track.
 func (s *SoundCloudClient) ResolveURL(ctx context.Context, soundcloudURL string) (*SoundCloudSearchResult, error) {
 	if s.clientID == "" {
 		return nil, fmt.Errorf("soundcloud client ID not configured")
@@ -284,16 +284,14 @@ func (s *SoundCloudClient) ResolveURL(ctx context.Context, soundcloudURL string)
 	}, nil
 }
 
-// upgradeSoundCloudThumbnail converts small thumbnail URLs to larger versions
+// upgradeSoundCloudThumbnail rewrites a thumbnail URL to the 500x500 variant.
+// SoundCloud encodes size in the filename (large.jpg is only 100x100, crop.jpg
+// 400x400, t300x300.jpg 300x300), so we swap any of those for t500x500.jpg.
 func upgradeSoundCloudThumbnail(thumbnailURL string) string {
-	// SoundCloud thumbnails come in different sizes:
-	// large.jpg (100x100), t500x500.jpg (500x500), crop.jpg (400x400), t300x300.jpg (300x300)
-	// Replace small size with larger size
 	if thumbnailURL == "" {
 		return ""
 	}
 
-	// Try to upgrade to t500x500
 	result := thumbnailURL
 	result = replaceSize(result, "large.jpg", "t500x500.jpg")
 	result = replaceSize(result, "t300x300.jpg", "t500x500.jpg")
@@ -302,9 +300,9 @@ func upgradeSoundCloudThumbnail(thumbnailURL string) string {
 	return result
 }
 
-// replaceSize replaces old size pattern with new size pattern in URL
+// replaceSize swaps oldSize for newSize only when url ends with oldSize, so it
+// rewrites the size suffix without touching a coincidental match earlier in the URL.
 func replaceSize(url, oldSize, newSize string) string {
-	// Simple string replacement
 	if len(url) > len(oldSize) {
 		idx := len(url) - len(oldSize)
 		if url[idx:] == oldSize {
@@ -314,13 +312,14 @@ func replaceSize(url, oldSize, newSize string) string {
 	return url
 }
 
-// getDefaultSoundCloudThumbnail returns a default thumbnail when none is available
+// getDefaultSoundCloudThumbnail returns SoundCloud's generic avatar, used when a
+// track has no artwork.
 func getDefaultSoundCloudThumbnail() string {
-	// SoundCloud's default avatar
 	return "https://a-v2.sndcdn.com/assets/images/sc-icons/ios-a62dfc8f.png"
 }
 
-// SearchTrending searches for trending tracks on SoundCloud
+// SearchTrending lists tracks, optionally filtered by genre, normalized like
+// Search results. An empty genre returns tracks across all genres.
 func (s *SoundCloudClient) SearchTrending(ctx context.Context, genre string, maxResults int) ([]SoundCloudSearchResult, error) {
 	if s.clientID == "" {
 		return nil, fmt.Errorf("soundcloud client ID not configured")
@@ -335,7 +334,6 @@ func (s *SoundCloudClient) SearchTrending(ctx context.Context, genre string, max
 		params.Add("genres", genre)
 	}
 
-	// Use the charts endpoint for trending tracks
 	trendingURL := fmt.Sprintf("%s/tracks?%s", s.baseURL, params.Encode())
 
 	req, err := http.NewRequestWithContext(ctx, "GET", trendingURL, nil)

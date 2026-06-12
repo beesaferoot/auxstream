@@ -37,7 +37,9 @@ func NewRefreshTokenService(cache cache.Cache, jwtService *JWTService) *RefreshT
 	}
 }
 
-// StoreRefreshToken saves the refresh token with TTL matching its expiry.
+// StoreRefreshToken persists the token under its JTI with a TTL matching its
+// expiry, and indexes the JTI in a per-user set so RevokeAllUserTokens can
+// later enumerate and revoke every active token. Errors if already expired.
 func (r *RefreshTokenService) StoreRefreshToken(ctx context.Context, userID uuid.UUID, tokenID string, expiresAt time.Time) error {
 	key := fmt.Sprintf("refresh_token:%s", tokenID)
 	refreshData := &RefreshTokenData{
@@ -59,7 +61,9 @@ func (r *RefreshTokenService) StoreRefreshToken(ctx context.Context, userID uuid
 	return r.cache.SAdd(ctx, userKey, tokenID)
 }
 
-// ValidateRefreshToken checks if the token is valid and not expired.
+// ValidateRefreshToken confirms the JTI is still stored (i.e. not revoked) and
+// unexpired, deleting it on expiry. This is the server-side revocation check
+// that JWTService.ValidateRefreshToken does not perform.
 func (r *RefreshTokenService) ValidateRefreshToken(ctx context.Context, tokenID string) (*RefreshTokenData, error) {
 	key := fmt.Sprintf("refresh_token:%s", tokenID)
 

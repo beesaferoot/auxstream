@@ -37,7 +37,7 @@ func InitDB(conf config.Config) *gorm.DB {
 	return db
 }
 
-// CloseDB closes the database connection
+// CloseDB closes the underlying connection pool, logging any error rather than returning it.
 func CloseDB(db *gorm.DB) {
 	sqlDB, err := db.DB()
 	if err != nil {

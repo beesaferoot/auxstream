@@ -10,7 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// LocalStore a FileSystem interface definition over localstorage
+// LocalStore is a FileSystem backed by a directory on the local disk. Its Save
+// identifiers are bare filenames relative to baseLocation, not absolute paths or URLs.
 type LocalStore struct {
 	writes       int
 	reads        int
@@ -18,6 +19,8 @@ type LocalStore struct {
 	mu           sync.Mutex
 }
 
+// NewLocalStore returns a store rooted at path, creating the directory tree if absent.
+// A directory it cannot create is fatal, since the store is unusable without it.
 func NewLocalStore(path string) *LocalStore {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
@@ -90,12 +93,14 @@ func (l *LocalStore) Remove(fileName string) error {
 	return os.Remove(filepath.Join(l.baseLocation, fileName))
 }
 
-// LocalFile  File interface definition over localstorage
+// LocalFile is a File backed by an *os.File. Remote backends also use it as the
+// destination for assets they download into a local temp path before returning.
 type LocalFile struct {
 	filePath string
 	content  *os.File
 }
 
+// NewFile creates (or truncates) the file at filePath for writing.
 func NewFile(filePath string) (file *LocalFile, err error) {
 	content, err := os.Create(filePath)
 	if err != nil {
@@ -105,6 +110,7 @@ func NewFile(filePath string) (file *LocalFile, err error) {
 	return file, nil
 }
 
+// OpenFile opens an existing file at filePath read-only.
 func OpenFile(filePath string) (*LocalFile, error) {
 	content, err := os.Open(filePath)
 	if err != nil {
@@ -138,6 +144,7 @@ func (f *LocalFile) WriteAt(p []byte, off int64) (n int, err error) {
 	return f.content.WriteAt(p, off)
 }
 
+// genFileName builds a collision-resistant name via UUID, defaulting ext to mp3.
 func genFileName(ext string) string {
 	if ext == "" {
 		ext = "mp3"
@@ -147,4 +154,7 @@ func genFileName(ext string) string {
 
 var cwd, _ = os.Getwd()
 var rootDir, _ = filepath.Abs(cwd)
+
+// Store is the package-wide FileSystem, defaulting to local disk under ./uploads
+// until SetFileStore swaps in a configured backend.
 var Store FileSystem = NewLocalStore(filepath.Join(rootDir, "uploads"))

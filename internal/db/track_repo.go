@@ -59,7 +59,7 @@ func (r *trackRepo) GetTracks(ctx context.Context, limit int, offset int) ([]*Tr
 
 	res := r.Db.WithContext(ctx).
 		Preload("Artist", func(db *gorm.DB) *gorm.DB {
-			return db.Select("id", "name", "created_at", "updated_at") // only select needed fields
+			return db.Select("id", "name", "created_at", "updated_at")
 		}).
 		Limit(limit).
 		Offset(offset).
@@ -178,7 +178,9 @@ func (r *trackRepo) BulkCreateTracks(ctx context.Context, inputs []BulkTrackInpu
 	return res.RowsAffected, res.Error
 }
 
-// GetTrendingTracks gets tracks sorted by play count (trending algorithm)
+// GetTrendingTracks returns tracks ordered by play count, then newest first to
+// break ties. A positive days restricts to tracks created within that window;
+// days <= 0 spans all time.
 func (r *trackRepo) GetTrendingTracks(ctx context.Context, limit int, offset int, days int) ([]*Track, error) {
 	var tracks []*Track
 
@@ -187,16 +189,14 @@ func (r *trackRepo) GetTrendingTracks(ctx context.Context, limit int, offset int
 			return db.Select("id", "name", "created_at", "updated_at")
 		})
 
-	// Filter by recency if days is specified
 	if days > 0 {
-		// Calculate the cutoff date
 		cutoffDate := time.Now().AddDate(0, 0, -days)
 		query = query.Where("created_at >= ?", cutoffDate)
 	}
 
 	res := query.
 		Order("play_count DESC").
-		Order("created_at DESC"). // Secondary sort by newest
+		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
 		Find(&tracks)
@@ -208,7 +208,7 @@ func (r *trackRepo) GetTrendingTracks(ctx context.Context, limit int, offset int
 	return tracks, nil
 }
 
-// GetRecentTracks gets recently added tracks
+// GetRecentTracks returns tracks newest first by creation time.
 func (r *trackRepo) GetRecentTracks(ctx context.Context, limit int, offset int) ([]*Track, error) {
 	var tracks []*Track
 
@@ -228,7 +228,8 @@ func (r *trackRepo) GetRecentTracks(ctx context.Context, limit int, offset int) 
 	return tracks, nil
 }
 
-// IncrementPlayCount increments the play count for a track
+// IncrementPlayCount atomically bumps the track's play count in the database
+// (no read-modify-write). A missing track id is not an error: zero rows update.
 func (r *trackRepo) IncrementPlayCount(ctx context.Context, trackId uuid.UUID) error {
 	res := r.Db.WithContext(ctx).
 		Model(&Track{}).
@@ -238,7 +239,8 @@ func (r *trackRepo) IncrementPlayCount(ctx context.Context, trackId uuid.UUID) e
 	return res.Error
 }
 
-// RecordPlayback records a playback event in the history
+// RecordPlayback appends a playback-history row stamped with the current time;
+// durationPlayed is the seconds listened. It does not touch the track's play count.
 func (r *trackRepo) RecordPlayback(ctx context.Context, userId uuid.UUID, trackId uuid.UUID, durationPlayed int) error {
 	playback := &PlaybackHistory{
 		ID:             uuid.New(),

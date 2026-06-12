@@ -13,7 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-// S3Store implements FileSystem over AWS S3 storage.
+// S3Store is a FileSystem backed by an AWS S3 bucket. Save returns the object's S3
+// URL (its Location) as the identifier; Read and Remove instead key off the object
+// key, so a URL from Save is not directly reusable as the argument to either.
 type S3Store struct {
 	session   *session.Session
 	bucketId  string
@@ -22,6 +24,9 @@ type S3Store struct {
 	mu        sync.Mutex
 }
 
+// NewS3Store targets bucketId, drawing region and credentials from the AWS default
+// chain (environment, shared config, instance role). Construction is fatal if no
+// session can be established.
 func NewS3Store(bucketId string) *S3Store {
 	sess := session.Must(session.NewSession())
 	return &S3Store{session: sess, bucketId: bucketId}
@@ -65,6 +70,8 @@ func (s3 *S3Store) Save(raw []byte, ext string) (filename string, err error) {
 func (s3 *S3Store) Read(location string) (File, error) {
 	downloader := s3manager.NewDownloader(s3.session)
 
+	// The downloader needs a WriterAt, so stage the object in a local temp file and
+	// hand that back as the File; the caller owns closing (and cleaning up) it.
 	lfile, err := NewFile(os.TempDir() + location)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file %q: %w", location, err)

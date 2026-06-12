@@ -14,8 +14,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// DBModelRegistry adapts the app's model registry to the gorm-migrate
+// GlobalModelRegistry interface so migrations can resolve model types by name.
 type DBModelRegistry struct{}
 
+// GetModels returns the name-to-model mapping migrations generate schema from.
 func (r *DBModelRegistry) GetModels() map[string]any {
 	return db.ModelTypeRegistry
 }

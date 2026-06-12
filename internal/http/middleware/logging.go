@@ -10,6 +10,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// LoggingMiddleware logs each request after it completes and records request
+// duration and active-connection gauges in Prometheus. Log severity is derived
+// from the response status (see getLogLevel), so 5xx surfaces as error logs.
 func LoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startTime := time.Now()
