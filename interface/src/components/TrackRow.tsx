@@ -37,8 +37,7 @@ const TrackRow = ({
 
   const { isAuthenticated } = useAuth()
   const { openAuth } = useUI()
-  const [menuOpen, setMenuOpen] = useState(false)
-  // Playlists reference DB tracks, so only Local tracks can be added.
+  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
   const canAdd = showAddToPlaylist && track.source === 'Local'
 
   return (
@@ -87,31 +86,27 @@ const TrackRow = ({
       </span>
 
       {canAdd && (
-        <div className="relative flex-none">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              if (!isAuthenticated) {
-                openAuth('signin')
-                return
-              }
-              setMenuOpen((o) => !o)
-            }}
-            title="Add to playlist"
-            className="flex h-[34px] w-[34px] items-center justify-center rounded-full text-faint-2 transition-colors hover:bg-line-sep hover:text-ink"
-          >
-            <EllipsisIcon size={18} />
-          </button>
-          {menuOpen && (
-            <div onClick={(e) => e.stopPropagation()}>
-              <AddToPlaylistMenu
-                trackId={track.id}
-                onClose={() => setMenuOpen(false)}
-                className="right-0 top-full mt-2"
-              />
-            </div>
-          )}
-        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            if (!isAuthenticated) {
+              openAuth('signin')
+              return
+            }
+            setMenuAnchor(e.currentTarget.getBoundingClientRect())
+          }}
+          title="Add to playlist"
+          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full text-faint-2 transition-colors hover:bg-line-sep hover:text-ink"
+        >
+          <EllipsisIcon size={18} />
+        </button>
+      )}
+      {canAdd && menuAnchor && (
+        <AddToPlaylistMenu
+          trackId={track.id}
+          anchor={menuAnchor}
+          onClose={() => setMenuAnchor(null)}
+        />
       )}
 
       <button

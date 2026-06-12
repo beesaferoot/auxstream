@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getPlaylists, addTrackToPlaylist } from '../utils/api'
 import { Playlist } from '../interfaces/playlists'
@@ -6,16 +7,18 @@ import { useToast } from './ui/Toast'
 import { PlusIcon } from './Icons'
 import PlaylistFormModal from './PlaylistFormModal'
 
+const PANEL_W = 240
+
 interface AddToPlaylistMenuProps {
   trackId: string
   onClose: () => void
-  /** Positioning classes for the popover panel (e.g. "right-0 bottom-full mb-2"). */
-  className?: string
+  /** Bounding rect of the trigger; the panel is positioned against it. */
+  anchor: DOMRect | null
 }
 
-/** Popover that adds a track to one of the user's playlists, or a brand-new one.
- *  Assumes the user is authenticated (callers gate on auth before opening it). */
-const AddToPlaylistMenu = ({ trackId, onClose, className = '' }: AddToPlaylistMenuProps) => {
+/** Add-to-playlist popover. Rendered in a portal with fixed positioning so it's never
+ *  clipped by an `overflow-hidden` list or trapped in a stacking context. */
+const AddToPlaylistMenu = ({ trackId, onClose, anchor }: AddToPlaylistMenuProps) => {
   const qc = useQueryClient()
   const { toast } = useToast()
   const [showForm, setShowForm] = useState(false)
@@ -24,6 +27,14 @@ const AddToPlaylistMenu = ({ trackId, onClose, className = '' }: AddToPlaylistMe
     queryKey: ['library', 'playlists'],
     queryFn: getPlaylists,
   })
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !showForm) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, showForm])
 
   const add = async (playlistId: string, name: string) => {
     try {
@@ -41,12 +52,31 @@ const AddToPlaylistMenu = ({ trackId, onClose, className = '' }: AddToPlaylistMe
     onClose()
   }
 
-  return (
+  if (!anchor) return null
+
+  const margin = 8
+  const left = Math.min(
+    Math.max(margin, anchor.right - PANEL_W),
+    window.innerWidth - PANEL_W - margin
+  )
+  // Flip above the trigger when there isn't room below (e.g. the now-playing bar).
+  const openAbove = anchor.bottom > window.innerHeight - 340
+  const pos = openAbove
+    ? { left, bottom: window.innerHeight - anchor.top + margin }
+    : { left, top: anchor.bottom + margin }
+
+  return createPortal(
     <>
-      {/* click-away */}
-      <div className="fixed inset-0 z-[70]" onClick={onClose} />
       <div
-        className={`absolute z-[71] w-[240px] animate-aux-pop overflow-hidden rounded-[16px] border-[1.5px] border-[#e7e9da] bg-white p-1.5 shadow-menu ${className}`}
+        className="fixed inset-0 z-[70]"
+        onClick={(e) => {
+          e.stopPropagation()
+          onClose()
+        }}
+      />
+      <div
+        style={pos}
+        className="fixed z-[71] w-[240px] animate-aux-pop overflow-hidden rounded-[16px] border-[1.5px] border-[#e7e9da] bg-white p-1.5 shadow-menu"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-2.5 pb-1.5 pt-1 font-mono text-[10px] uppercase tracking-[2px] text-faint">
@@ -88,7 +118,8 @@ const AddToPlaylistMenu = ({ trackId, onClose, className = '' }: AddToPlaylistMe
         onClose={() => setShowForm(false)}
         onSaved={(p) => add(p.id, p.name)}
       />
-    </>
+    </>,
+    document.body
   )
 }
 

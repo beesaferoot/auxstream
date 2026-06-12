@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createPlaylist, updatePlaylist } from '../utils/api'
 import { Playlist } from '../interfaces/playlists'
@@ -25,6 +25,15 @@ const PlaylistFormModal = ({ open, onClose, playlist, onSaved }: PlaylistFormMod
   const [description, setDescription] = useState(playlist?.description ?? '')
   const [isPublic, setIsPublic] = useState(playlist?.is_public ?? false)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !saving) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, saving, onClose])
 
   if (!open) return null
 
@@ -60,6 +69,7 @@ const PlaylistFormModal = ({ open, onClose, playlist, onSaved }: PlaylistFormMod
     <div
       className="fixed inset-0 z-[90] flex animate-aux-pop items-center justify-center p-6"
       style={{ background: 'rgba(12,14,8,.46)', backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)' }}
+      onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !saving) onClose()
       }}

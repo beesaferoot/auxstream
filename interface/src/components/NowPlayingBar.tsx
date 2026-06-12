@@ -41,7 +41,7 @@ const NowPlayingBar = () => {
 
   const { isAuthenticated } = useAuth()
   const { openAuth } = useUI()
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
 
   const eqState = isPlaying ? 'running' : 'paused'
   const hasTrack = !!current
@@ -147,22 +147,24 @@ const NowPlayingBar = () => {
           />
         </div>
         {canAdd && (
-          <div className="relative">
-            <button
-              onClick={() => (isAuthenticated ? setMenuOpen((o) => !o) : openAuth('signin'))}
-              title="Add to playlist"
-              className="cursor-pointer p-1 text-muted-dark-3 transition-colors hover:text-lime"
-            >
-              <EllipsisIcon size={20} />
-            </button>
-            {menuOpen && (
-              <AddToPlaylistMenu
-                trackId={current.id}
-                onClose={() => setMenuOpen(false)}
-                className="bottom-full right-0 mb-2"
-              />
-            )}
-          </div>
+          <button
+            onClick={(e) =>
+              isAuthenticated
+                ? setMenuAnchor(e.currentTarget.getBoundingClientRect())
+                : openAuth('signin')
+            }
+            title="Add to playlist"
+            className="cursor-pointer p-1 text-muted-dark-3 transition-colors hover:text-lime"
+          >
+            <EllipsisIcon size={20} />
+          </button>
+        )}
+        {canAdd && menuAnchor && (
+          <AddToPlaylistMenu
+            trackId={current.id}
+            anchor={menuAnchor}
+            onClose={() => setMenuAnchor(null)}
+          />
         )}
         <button
           onClick={() => hasTrack && openPlayer()}

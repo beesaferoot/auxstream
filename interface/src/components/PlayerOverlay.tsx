@@ -44,7 +44,7 @@ const PlayerOverlay = () => {
   } = usePlayer()
   const { isAuthenticated } = useAuth()
   const { openAuth } = useUI()
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
 
   if (!isOpen || !current) return null
 
@@ -112,25 +112,27 @@ const PlayerOverlay = () => {
           <div className="mt-2 flex items-center gap-3 text-[20px] text-muted-dark-2">
             <span>{current.artist}</span>
             {canAdd && (
-              <div className="relative">
-                <button
-                  onClick={() => (isAuthenticated ? setMenuOpen((o) => !o) : openAuth('signin'))}
-                  title="Add to playlist"
-                  className="flex items-center gap-1.5 rounded-pill border-[1.5px] border-border-dark-2 px-3 py-1 text-[13px] font-semibold text-muted-dark transition-colors hover:border-lime hover:text-lime"
-                >
-                  <PlusIcon size={15} />
-                  Add to playlist
-                </button>
-                {menuOpen && (
-                  <AddToPlaylistMenu
-                    trackId={current.id}
-                    onClose={() => setMenuOpen(false)}
-                    className="left-0 top-full mt-2"
-                  />
-                )}
-              </div>
+              <button
+                onClick={(e) =>
+                  isAuthenticated
+                    ? setMenuAnchor(e.currentTarget.getBoundingClientRect())
+                    : openAuth('signin')
+                }
+                title="Add to playlist"
+                className="flex items-center gap-1.5 rounded-pill border-[1.5px] border-border-dark-2 px-3 py-1 text-[13px] font-semibold text-muted-dark transition-colors hover:border-lime hover:text-lime"
+              >
+                <PlusIcon size={15} />
+                Add to playlist
+              </button>
             )}
           </div>
+          {canAdd && menuAnchor && (
+            <AddToPlaylistMenu
+              trackId={current.id}
+              anchor={menuAnchor}
+              onClose={() => setMenuAnchor(null)}
+            />
+          )}
 
           {/* waveform */}
           <div
