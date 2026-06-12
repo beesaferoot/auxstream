@@ -14,6 +14,11 @@ build-frontend:
 docker-up:
 	$(MAKE) -C deploy dev
 
+# Like docker-up, but the frontend runs the Vite dev server with hot-reload (HMR):
+# edit anything in interface/ and the browser updates instantly — no image rebuild.
+docker-up-hot:
+	$(MAKE) -C deploy dev-hot
+
 docker-down:
 	$(MAKE) -C deploy down
 
@@ -42,4 +47,4 @@ deploy-backend:
 deploy-frontend: build-frontend
 	sudo systemctl reload nginx
 
-.PHONY: test build-frontend docker-up docker-down docker-logs migrate migrate-status migrate-history migrate-down deploy-backend deploy-frontend
+.PHONY: test build-frontend docker-up docker-up-hot docker-down docker-logs migrate migrate-status migrate-history migrate-down deploy-backend deploy-frontend

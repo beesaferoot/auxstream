@@ -1,0 +1,23 @@
+# Frontend hot-reload override. Runs the Vite dev server (HMR) against live-mounted
+# source instead of `vite preview` on a prebuilt dist/. Edit anything under interface/
+# and the browser updates instantly — no image rebuild.
+#
+# Use via `make dev-hot` (from repo root: `make docker-up-hot`), or directly:
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml \
+#                  -f docker-compose.dev.yml up
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  interface:
+    # Dev server instead of the static preview. Same port the stack already publishes.
+    command: ["npm", "run", "dev", "--", "--host", "--port", "8080"]
+    environment:
+      # Same-origin API base, proxied to the api service (read at runtime in dev).
+      VITE_BASE_URL: /api/v1
+      VITE_API_PROXY: http://api:5009
+      # Poll for file changes so HMR works across the host bind mount.
+      VITE_USE_POLLING: "true"
+    volumes:
+      - ../interface:/web
+      - /web/node_modules

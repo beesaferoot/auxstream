@@ -11,12 +11,18 @@ const proxy = {
   '/health': { target: apiProxy, changeOrigin: true },
 }
 
+const watch = process.env.VITE_USE_POLLING
+  ? { usePolling: true, interval: 120 }
+  : undefined
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true,
     port: 3000,
     proxy,
+    watch,
   },
   // `vite preview` serves the production build (dist/) and, like the dev server,
   // proxies the API so the SPA stays same-origin. host:true binds 0.0.0.0 so the
