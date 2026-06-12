@@ -156,3 +156,42 @@ export const LogoutIcon = ({ size = 18, className, strokeWidth = 2 }: IconProps)
     <path d="M21 12H9" />
   </svg>
 )
+
+export const EllipsisIcon = ({ size = 18, className }: IconProps) => (
+  <svg {...svgBase(size, className)} fill="currentColor">
+    <circle cx="12" cy="5" r="1.6" />
+    <circle cx="12" cy="12" r="1.6" />
+    <circle cx="12" cy="19" r="1.6" />
+  </svg>
+)
+
+export const TrashIcon = ({ size = 18, className, strokeWidth = 2 }: IconProps) => (
+  <svg {...svgBase(size, className)} {...stroke(strokeWidth)}>
+    <path d="M3 6h18" />
+    <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+)
+
+export const GripIcon = ({ size = 18, className }: IconProps) => (
+  <svg {...svgBase(size, className)} fill="currentColor">
+    <circle cx="9" cy="6" r="1.5" />
+    <circle cx="15" cy="6" r="1.5" />
+    <circle cx="9" cy="12" r="1.5" />
+    <circle cx="15" cy="12" r="1.5" />
+    <circle cx="9" cy="18" r="1.5" />
+    <circle cx="15" cy="18" r="1.5" />
+  </svg>
+)
+
+export const ShareIcon = ({ size = 18, className, strokeWidth = 2 }: IconProps) => (
+  <svg {...svgBase(size, className)} {...stroke(strokeWidth)}>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+    <line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
+  </svg>
+)

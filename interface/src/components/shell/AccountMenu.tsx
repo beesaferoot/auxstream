@@ -1,20 +1,15 @@
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../ui/Toast'
-import { GearIcon, LinkIcon, LogoutIcon } from '../Icons'
+import { LogoutIcon } from '../Icons'
 
 interface AccountMenuProps {
   onClose: () => void
 }
 
-/** Popover anchored to the rail avatar: identity + settings + log out. */
+/** Popover anchored to the rail avatar: identity + log out. */
 const AccountMenu = ({ onClose }: AccountMenuProps) => {
   const { userName, userEmail, userInitial, logout } = useAuth()
   const { toast } = useToast()
-
-  const soon = (label: string) => {
-    toast({ title: `${label} coming soon`, status: 'info' })
-    onClose()
-  }
 
   const handleLogout = async () => {
     await logout()
@@ -39,26 +34,6 @@ const AccountMenu = ({ onClose }: AccountMenuProps) => {
             <div className="truncate text-[13px] text-muted-3">{userEmail || ''}</div>
           </div>
         </div>
-
-        <div className="mx-1 mb-1.5 h-px bg-line-sep" />
-
-        <button
-          onClick={() => soon('Account settings')}
-          className="flex w-full items-center gap-[11px] rounded-[11px] px-2.5 py-2.5 text-left text-[15px] text-[#2d3022] transition-colors hover:bg-[#f5f7ec]"
-        >
-          <GearIcon size={18} />
-          Account settings
-        </button>
-        <button
-          onClick={() => soon('Connect sources')}
-          className="flex w-full items-center gap-[11px] rounded-[11px] px-2.5 py-2.5 text-left text-[15px] text-[#2d3022] transition-colors hover:bg-[#f5f7ec]"
-        >
-          <LinkIcon size={18} />
-          <span className="flex-1">Connect sources</span>
-          <span className="rounded-full border border-[#e7e9da] bg-[#f1f2e7] px-[7px] py-0.5 font-mono text-[11px] text-faint">
-            2 linked
-          </span>
-        </button>
 
         <div className="mx-1 my-1.5 h-px bg-line-sep" />
 

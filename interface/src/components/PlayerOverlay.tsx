@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
+import { useAuth } from '../context/AuthContext'
+import { useUI } from '../context/UIContext'
 import Cover from './Cover'
 import { fmtSeconds } from '../lib/track'
 import { glow } from '../lib/covers'
 import { WAVEFORM, isPlayed } from '../lib/waveform'
+import AddToPlaylistMenu from './AddToPlaylistMenu'
 import {
   PlayIcon,
   PauseIcon,
@@ -13,6 +17,7 @@ import {
   RepeatIcon,
   ChevronDownIcon,
   SearchIcon,
+  PlusIcon,
 } from './Icons'
 
 /** Immersive full-screen now-playing experience with waveform scrubber + queue. */
@@ -37,11 +42,15 @@ const PlayerOverlay = () => {
     toggleShuffle,
     toggleRepeat,
   } = usePlayer()
+  const { isAuthenticated } = useAuth()
+  const { openAuth } = useUI()
+  const [menuOpen, setMenuOpen] = useState(false)
 
   if (!isOpen || !current) return null
 
   const eqState = isPlaying ? 'running' : 'paused'
   const upNext = queue.filter((t) => t.key !== current.key)
+  const canAdd = current.source === 'Local'
 
   const seekFromEvent = (e: React.MouseEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
@@ -100,7 +109,28 @@ const PlayerOverlay = () => {
           <div className="font-display text-[46px] font-extrabold leading-none tracking-[-1.4px]">
             {current.title}
           </div>
-          <div className="mt-2 text-[20px] text-muted-dark-2">{current.artist}</div>
+          <div className="mt-2 flex items-center gap-3 text-[20px] text-muted-dark-2">
+            <span>{current.artist}</span>
+            {canAdd && (
+              <div className="relative">
+                <button
+                  onClick={() => (isAuthenticated ? setMenuOpen((o) => !o) : openAuth('signin'))}
+                  title="Add to playlist"
+                  className="flex items-center gap-1.5 rounded-pill border-[1.5px] border-border-dark-2 px-3 py-1 text-[13px] font-semibold text-muted-dark transition-colors hover:border-lime hover:text-lime"
+                >
+                  <PlusIcon size={15} />
+                  Add to playlist
+                </button>
+                {menuOpen && (
+                  <AddToPlaylistMenu
+                    trackId={current.id}
+                    onClose={() => setMenuOpen(false)}
+                    className="left-0 top-full mt-2"
+                  />
+                )}
+              </div>
+            )}
+          </div>
 
           {/* waveform */}
           <div

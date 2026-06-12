@@ -40,6 +40,24 @@ func (j *JWTService) JWTAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+// OptionalJWTAuthMiddleware sets user claims in context when a valid Bearer token is
+// present, but — unlike JWTAuthMiddleware — never aborts. Routes that are readable by
+// anonymous visitors (e.g. a public/shared playlist) use this and then decide access
+// themselves via GetUserFromContext.
+func (j *JWTService) OptionalJWTAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if authHeader != "" && tokenString != authHeader {
+			if claims, err := j.ValidateAccessToken(tokenString); err == nil {
+				ctx := context.WithValue(c.Request.Context(), UserContextKey, claims)
+				c.Request = c.Request.WithContext(ctx)
+			}
+		}
+		c.Next()
+	}
+}
+
 // GetUserFromContext extracts user claims from context
 func GetUserFromContext(c *gin.Context) (*JWTClaims, bool) {
 	claims, ok := c.Request.Context().Value(UserContextKey).(*JWTClaims)

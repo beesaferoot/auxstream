@@ -204,6 +204,35 @@ func (s *server) setupRouter() *gin.Engine {
 		})
 	}
 
+	playlists := v1.Group("/playlists")
+	{
+		playlists.GET("", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+			handlers.GetUserPlaylistsHandler(c, db.NewPlaylistRepo(s.db))
+		})
+		playlists.POST("", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+			handlers.CreatePlaylistHandler(c, db.NewPlaylistRepo(s.db))
+		})
+		// Public-shareable: optional auth so anonymous visitors can view a public playlist.
+		playlists.GET("/:id", s.jwtService.OptionalJWTAuthMiddleware(), func(c *gin.Context) {
+			handlers.GetPlaylistHandler(c, db.NewPlaylistRepo(s.db))
+		})
+		playlists.PATCH("/:id", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+			handlers.UpdatePlaylistHandler(c, db.NewPlaylistRepo(s.db))
+		})
+		playlists.DELETE("/:id", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+			handlers.DeletePlaylistHandler(c, db.NewPlaylistRepo(s.db))
+		})
+		playlists.POST("/:id/tracks", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+			handlers.AddTrackToPlaylistHandler(c, db.NewPlaylistRepo(s.db), db.NewTrackRepo(s.db))
+		})
+		playlists.PUT("/:id/tracks/order", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+			handlers.ReorderTracksHandler(c, db.NewPlaylistRepo(s.db))
+		})
+		playlists.DELETE("/:id/tracks/:trackId", s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+			handlers.RemoveTrackHandler(c, db.NewPlaylistRepo(s.db))
+		})
+	}
+
 	// Deprecated: prefer POST /tracks and POST /tracks/bulk. These flat aliases
 	// are retained for backwards compatibility with existing clients.
 	v1.POST("/upload_track", uploadLimit, s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {

@@ -1,7 +1,19 @@
+import { useState } from 'react'
 import { usePlayer } from '../context/PlayerContext'
+import { useAuth } from '../context/AuthContext'
+import { useUI } from '../context/UIContext'
 import Cover from './Cover'
 import { fmtSeconds } from '../lib/track'
-import { PlayIcon, PauseIcon, PrevIcon, NextIcon, VolumeIcon, ExpandIcon } from './Icons'
+import AddToPlaylistMenu from './AddToPlaylistMenu'
+import {
+  PlayIcon,
+  PauseIcon,
+  PrevIcon,
+  NextIcon,
+  VolumeIcon,
+  ExpandIcon,
+  EllipsisIcon,
+} from './Icons'
 
 const EQ_DELAYS = ['0s', '.3s', '.15s', '.45s']
 
@@ -27,8 +39,13 @@ const NowPlayingBar = () => {
     return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
   }
 
+  const { isAuthenticated } = useAuth()
+  const { openAuth } = useUI()
+  const [menuOpen, setMenuOpen] = useState(false)
+
   const eqState = isPlaying ? 'running' : 'paused'
   const hasTrack = !!current
+  const canAdd = hasTrack && current.source === 'Local'
   const pct = `${(progress * 100).toFixed(1)}%`
 
   return (
@@ -129,6 +146,24 @@ const NowPlayingBar = () => {
             style={{ width: `${volume * 100}%` }}
           />
         </div>
+        {canAdd && (
+          <div className="relative">
+            <button
+              onClick={() => (isAuthenticated ? setMenuOpen((o) => !o) : openAuth('signin'))}
+              title="Add to playlist"
+              className="cursor-pointer p-1 text-muted-dark-3 transition-colors hover:text-lime"
+            >
+              <EllipsisIcon size={20} />
+            </button>
+            {menuOpen && (
+              <AddToPlaylistMenu
+                trackId={current.id}
+                onClose={() => setMenuOpen(false)}
+                className="bottom-full right-0 mb-2"
+              />
+            )}
+          </div>
+        )}
         <button
           onClick={() => hasTrack && openPlayer()}
           disabled={!hasTrack}

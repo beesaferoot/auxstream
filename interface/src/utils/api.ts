@@ -10,6 +10,11 @@ import {
   RegisterRequest,
   RegisterResponse,
 } from '../interfaces/auth.ts'
+import {
+  Playlist,
+  PlaylistDetail,
+  PlaylistInput,
+} from '../interfaces/playlists.ts'
 import { BASE_URL as BASE_URL_IMPORT } from './constants.ts'
 
 export const BASE_URL = BASE_URL_IMPORT
@@ -27,6 +32,7 @@ export enum HTTPMethods {
   get = 'GET',
   post = 'POST',
   put = 'PUT',
+  patch = 'PATCH',
   delete = 'DELETE',
 }
 
@@ -480,6 +486,77 @@ export async function getTrackById(trackId: string): Promise<Track> {
     path: `/tracks/${trackId}`,
   })
   return response.data
+}
+
+// Get the authenticated user's playlists (with track counts)
+export async function getPlaylists(): Promise<Playlist[]> {
+  const response = await request<{ data: Playlist[] }>({ path: `/playlists` })
+  return response.data ?? []
+}
+
+// Get a single playlist with its ordered tracks (public playlists work unauthenticated)
+export async function getPlaylist(id: string): Promise<PlaylistDetail> {
+  const response = await request<{ data: PlaylistDetail }>({
+    path: `/playlists/${id}`,
+  })
+  return response.data
+}
+
+export async function createPlaylist(input: PlaylistInput): Promise<Playlist> {
+  const response = await request<{ data: Playlist }>({
+    path: `/playlists`,
+    method: HTTPMethods.post,
+    body: input as unknown as Record<string, unknown>,
+  })
+  return response.data
+}
+
+export async function updatePlaylist(
+  id: string,
+  input: PlaylistInput
+): Promise<Playlist> {
+  const response = await request<{ data: Playlist }>({
+    path: `/playlists/${id}`,
+    method: HTTPMethods.patch,
+    body: input as unknown as Record<string, unknown>,
+  })
+  return response.data
+}
+
+export async function deletePlaylist(id: string): Promise<void> {
+  await request({ path: `/playlists/${id}`, method: HTTPMethods.delete })
+}
+
+export async function addTrackToPlaylist(
+  id: string,
+  trackId: string
+): Promise<void> {
+  await request({
+    path: `/playlists/${id}/tracks`,
+    method: HTTPMethods.post,
+    body: { track_id: trackId },
+  })
+}
+
+export async function removeTrackFromPlaylist(
+  id: string,
+  trackId: string
+): Promise<void> {
+  await request({
+    path: `/playlists/${id}/tracks/${trackId}`,
+    method: HTTPMethods.delete,
+  })
+}
+
+export async function reorderPlaylistTracks(
+  id: string,
+  trackIds: string[]
+): Promise<void> {
+  await request({
+    path: `/playlists/${id}/tracks/order`,
+    method: HTTPMethods.put,
+    body: { track_ids: trackIds },
+  })
 }
 
 // Authentication API functions

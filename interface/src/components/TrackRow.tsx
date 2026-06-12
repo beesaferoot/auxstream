@@ -1,6 +1,10 @@
+import { useState } from 'react'
 import Cover from './Cover'
-import { PlayIcon } from './Icons'
+import { PlayIcon, EllipsisIcon } from './Icons'
 import { PlayableTrack } from '../lib/track'
+import { useAuth } from '../context/AuthContext'
+import { useUI } from '../context/UIContext'
+import AddToPlaylistMenu from './AddToPlaylistMenu'
 
 interface TrackRowProps {
   track: PlayableTrack
@@ -13,6 +17,8 @@ interface TrackRowProps {
   whenLabel?: string
   /** Show the lime "new" dot on the cover. */
   fresh?: boolean
+  /** Show the ⋮ add-to-playlist action (Local tracks only). Defaults to true. */
+  showAddToPlaylist?: boolean
 }
 
 /** A horizontal track row: cover, title/artist, source, optional when, duration, play. */
@@ -23,10 +29,17 @@ const TrackRow = ({
   sourcePill = false,
   whenLabel,
   fresh = false,
+  showAddToPlaylist = true,
 }: TrackRowProps) => {
   const isSearch = variant === 'search'
   const coverSize = isSearch ? 'h-[54px] w-[54px]' : 'h-[50px] w-[50px]'
   const playSize = isSearch ? 'h-9 w-9' : 'h-[34px] w-[34px]'
+
+  const { isAuthenticated } = useAuth()
+  const { openAuth } = useUI()
+  const [menuOpen, setMenuOpen] = useState(false)
+  // Playlists reference DB tracks, so only Local tracks can be added.
+  const canAdd = showAddToPlaylist && track.source === 'Local'
 
   return (
     <div
@@ -72,6 +85,34 @@ const TrackRow = ({
       <span className="w-[46px] text-right font-mono text-[13px] text-faint">
         {track.durationLabel}
       </span>
+
+      {canAdd && (
+        <div className="relative flex-none">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (!isAuthenticated) {
+                openAuth('signin')
+                return
+              }
+              setMenuOpen((o) => !o)
+            }}
+            title="Add to playlist"
+            className="flex h-[34px] w-[34px] items-center justify-center rounded-full text-faint-2 transition-colors hover:bg-line-sep hover:text-ink"
+          >
+            <EllipsisIcon size={18} />
+          </button>
+          {menuOpen && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <AddToPlaylistMenu
+                trackId={track.id}
+                onClose={() => setMenuOpen(false)}
+                className="right-0 top-full mt-2"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       <button
         onClick={(e) => {
