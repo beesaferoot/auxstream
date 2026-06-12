@@ -5,7 +5,7 @@ import { useUI } from '../context/UIContext'
 import { useToast } from './ui/Toast'
 import { UploadIcon, PlusIcon } from './Icons'
 
-const ACCEPTED = ['.mp3']
+const ACCEPTED = ['.mp3', '.flac', '.wav', '.m4a', '.ogg']
 const MAX_SIZE = 100 * 1024 * 1024 // 100MB
 
 interface UploadDropzoneProps {
@@ -39,7 +39,7 @@ const UploadDropzone = ({ onUploaded }: UploadDropzoneProps) => {
     const valid = files.filter((f) => {
       const ext = '.' + (f.name.split('.').pop()?.toLowerCase() ?? '')
       if (!ACCEPTED.includes(ext)) {
-        toast({ title: `Skipped ${f.name}`, description: 'Only MP3 is supported', status: 'error' })
+        toast({ title: `Skipped ${f.name}`, description: `Unsupported format ${ext}`, status: 'error' })
         return false
       }
       if (f.size > MAX_SIZE) {
@@ -112,7 +112,7 @@ const UploadDropzone = ({ onUploaded }: UploadDropzoneProps) => {
         <input
           ref={inputRef}
           type="file"
-          accept="audio/mpeg,.mp3"
+          accept="audio/*"
           multiple
           disabled={uploading}
           className="hidden"
@@ -142,7 +142,8 @@ const UploadDropzone = ({ onUploaded }: UploadDropzoneProps) => {
             </div>
           ) : (
             <div className="mt-[3px] text-[15px] text-muted-2">
-              Drag tracks here or browse — MP3 only. They land in your unified library instantly.
+              Drag tracks here or browse — MP3, FLAC, WAV, M4A or OGG. They land in your unified
+              library instantly.
             </div>
           )}
         </div>

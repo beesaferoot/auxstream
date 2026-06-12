@@ -9,11 +9,12 @@ type FileMeta struct {
 	Name       string
 	AudioTitle string
 	Content    []byte
+	Ext        string
 }
 
 // FileSystem A generic interface for file storage operations
 type FileSystem interface {
-	Save(raw []byte) (filename string, err error)
+	Save(raw []byte, ext string) (filename string, err error)
 	Read(fileName string) (file File, err error)
 	Reads() int
 	Writes() int

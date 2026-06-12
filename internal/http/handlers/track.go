@@ -9,7 +9,6 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -138,11 +137,6 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		return
 	}
 
-	if !strings.HasSuffix(file.Filename, ".mp3") {
-		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("invalid audio format use mp3 instead"))
-		return
-	}
-
 	audioFile, err := file.Open()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unable to access track audio"))
@@ -157,12 +151,12 @@ func AddTrackHandler(c *gin.Context, r db.TrackRepo, artistRepo db.ArtistRepo) {
 		return
 	}
 
-	// Validate the bytes really are MP3, not just a .mp3-named file.
-	if !looksLikeMP3(audioBytes) {
-		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("file is not a valid mp3"))
+	ext, ok := detectAudioFormat(audioBytes)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("unsupported audio format (use mp3, flac, wav, m4a or ogg)"))
 		return
 	}
-	filePath, err := fs.Store.Save(audioBytes)
+	filePath, err := fs.Store.Save(audioBytes, ext)
 	if err != nil {
 		log.Printf("store audio error: %v", err)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse("failed to store audio"))
@@ -226,7 +220,7 @@ func BulkTrackUploadHandler(c *gin.Context, r db.TrackRepo) {
 
 	inputs := processFiles(reqForm.Files, reqForm.Titles)
 	if len(inputs) == 0 {
-		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("no valid mp3 files within the size limit were uploaded"))
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorResponse("no valid audio files within the size limit were uploaded"))
 		return
 	}
 
@@ -274,14 +268,15 @@ func processFiles(files []*multipart.FileHeader, titles []string) []db.BulkTrack
 			log.Printf("bulk read file %q: %v", file.Filename, readErr)
 			continue
 		}
-		if !looksLikeMP3(audioBytes) {
-			log.Printf("bulk reject file %q: not a valid mp3", file.Filename)
+		ext, ok := detectAudioFormat(audioBytes)
+		if !ok {
+			log.Printf("bulk reject file %q: unsupported audio format", file.Filename)
 			continue
 		}
 
 		// Carry the track title (not the filename) so results stay correlated
 		// even when two files share a name.
-		toSave = append(toSave, fs.FileMeta{AudioTitle: titles[idx], Content: audioBytes})
+		toSave = append(toSave, fs.FileMeta{AudioTitle: titles[idx], Content: audioBytes, Ext: ext})
 	}
 
 	if len(toSave) == 0 {

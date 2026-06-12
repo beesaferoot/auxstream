@@ -46,12 +46,12 @@ func (cld *CloudinaryStore) Writes() int {
 	return cld.uploads
 }
 
-func (cld *CloudinaryStore) Save(raw []byte) (filename string, err error) {
+func (cld *CloudinaryStore) Save(raw []byte, ext string) (filename string, err error) {
 	if len(raw) < 1 {
 		return "", errors.New("empty file")
 	}
 
-	filename = genFileName()
+	filename = genFileName(ext)
 
 	freader := bytes.NewReader(raw)
 
@@ -59,7 +59,8 @@ func (cld *CloudinaryStore) Save(raw []byte) (filename string, err error) {
 		context.Background(),
 		freader,
 		uploader.UploadParams{
-			PublicID:       strings.TrimSuffix(filename, ".mp3"),
+			PublicID:       strings.TrimSuffix(filename, "."+ext),
+			ResourceType:   "video",
 			UniqueFilename: api.Bool(false),
 			Overwrite:      api.Bool(true),
 		},
@@ -82,7 +83,7 @@ func (cld *CloudinaryStore) Read(locationURL string) (File, error) {
 	}
 	defer resp.Body.Close()
 
-	file, err := NewFile(os.TempDir() + genFileName())
+	file, err := NewFile(os.TempDir() + genFileName("tmp"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -102,16 +103,16 @@ func (cld *CloudinaryStore) BulkSave(buf chan<- FileMeta, listOfFileMeta []FileM
 	var wg sync.WaitGroup
 	for _, fd := range listOfFileMeta {
 		wg.Add(1)
-		go func(raw []byte, title string) {
+		go func(raw []byte, title, ext string) {
 			defer wg.Done()
-			fileUrl, err := cld.Save(raw)
+			fileUrl, err := cld.Save(raw, ext)
 			if err != nil {
 				log.Printf("bulk save error: %s", err.Error())
 				buf <- FileMeta{AudioTitle: title}
 				return
 			}
-			buf <- FileMeta{Name: fileUrl, Content: raw, AudioTitle: title}
-		}(fd.Content, fd.AudioTitle)
+			buf <- FileMeta{Name: fileUrl, Content: raw, AudioTitle: title, Ext: ext}
+		}(fd.Content, fd.AudioTitle, fd.Ext)
 	}
 	wg.Wait()
 	close(buf)

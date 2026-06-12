@@ -8,23 +8,29 @@ import "github.com/gin-gonic/gin"
 // bound memory use and keep the upload surface from being abused.
 var MaxUploadBytes int64 = 5 << 20
 
-// looksLikeMP3 reports whether head begins with a plausible MP3 signature:
-// either an ID3v2 tag or an MPEG audio frame sync. This is a content check, so
-// it rejects non-audio payloads that were merely renamed with a .mp3 extension.
-func looksLikeMP3(head []byte) bool {
-	if len(head) < 3 {
-		return false
+// detectAudioFormat reports the audio format of a payload from its leading magic
+// bytes, returning the canonical file extension and whether it is a supported type.
+// This is a content check, so renamed/non-audio payloads are rejected.
+func detectAudioFormat(head []byte) (ext string, ok bool) {
+	if len(head) >= 3 && head[0] == 'I' && head[1] == 'D' && head[2] == '3' {
+		return "mp3", true
 	}
-	// ID3v2-tagged files start with the ASCII bytes "ID3".
-	if head[0] == 'I' && head[1] == 'D' && head[2] == '3' {
-		return true
+	if len(head) >= 2 && head[0] == 0xFF && head[1]&0xE0 == 0xE0 {
+		return "mp3", true
 	}
-	// Headerless MP3 frames start with an 11-bit frame sync: 0xFF followed by
-	// a byte whose top three bits are set.
-	if head[0] == 0xFF && head[1]&0xE0 == 0xE0 {
-		return true
+	if len(head) >= 4 && string(head[0:4]) == "fLaC" {
+		return "flac", true
 	}
-	return false
+	if len(head) >= 4 && string(head[0:4]) == "OggS" {
+		return "ogg", true
+	}
+	if len(head) >= 12 && string(head[0:4]) == "RIFF" && string(head[8:12]) == "WAVE" {
+		return "wav", true
+	}
+	if len(head) >= 8 && string(head[4:8]) == "ftyp" {
+		return "m4a", true
+	}
+	return "", false
 }
 
 // contextKey is a private type for request-context keys, avoiding collisions

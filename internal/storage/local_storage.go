@@ -38,11 +38,11 @@ func (l *LocalStore) Writes() int {
 	return l.writes
 }
 
-func (l *LocalStore) Save(raw []byte) (filename string, err error) {
+func (l *LocalStore) Save(raw []byte, ext string) (filename string, err error) {
 	if len(raw) < 1 {
 		return filename, fmt.Errorf("empty file")
 	}
-	filename = genFileName()
+	filename = genFileName(ext)
 	file, err := NewFile(filepath.Join(l.baseLocation, filename))
 	if err != nil {
 		return "", err
@@ -71,16 +71,16 @@ func (l *LocalStore) BulkSave(buf chan<- FileMeta, listOfFileMeta []FileMeta) {
 	var wg sync.WaitGroup
 	for _, fd := range listOfFileMeta {
 		wg.Add(1)
-		go func(raw []byte, title string) {
+		go func(raw []byte, title, ext string) {
 			defer wg.Done()
-			fileName, err := l.Save(raw)
+			fileName, err := l.Save(raw, ext)
 			if err != nil {
 				log.Println(err)
 				buf <- FileMeta{AudioTitle: title}
 				return
 			}
-			buf <- FileMeta{Name: fileName, Content: raw, AudioTitle: title}
-		}(fd.Content, fd.AudioTitle)
+			buf <- FileMeta{Name: fileName, Content: raw, AudioTitle: title, Ext: ext}
+		}(fd.Content, fd.AudioTitle, fd.Ext)
 	}
 	wg.Wait()
 	close(buf)
@@ -138,8 +138,11 @@ func (f *LocalFile) WriteAt(p []byte, off int64) (n int, err error) {
 	return f.content.WriteAt(p, off)
 }
 
-func genFileName() string {
-	return "aud_file_" + uuid.New().String() + ".mp3"
+func genFileName(ext string) string {
+	if ext == "" {
+		ext = "mp3"
+	}
+	return "aud_file_" + uuid.New().String() + "." + ext
 }
 
 var cwd, _ = os.Getwd()

@@ -35,11 +35,11 @@ func (s3 *S3Store) Writes() int {
 	return s3.uploads
 }
 
-func (s3 *S3Store) Save(raw []byte) (filename string, err error) {
+func (s3 *S3Store) Save(raw []byte, ext string) (filename string, err error) {
 	if len(raw) < 1 {
 		return "", fmt.Errorf("empty file")
 	}
-	filename = genFileName()
+	filename = genFileName(ext)
 
 	freader := bytes.NewReader(raw)
 
@@ -88,16 +88,16 @@ func (s3 *S3Store) BulkSave(buf chan<- FileMeta, listOfFileMeta []FileMeta) {
 	var wg sync.WaitGroup
 	for _, fd := range listOfFileMeta {
 		wg.Add(1)
-		go func(raw []byte, title string) {
+		go func(raw []byte, title, ext string) {
 			defer wg.Done()
-			fileName, err := s3.Save(raw)
+			fileName, err := s3.Save(raw, ext)
 			if err != nil {
 				log.Println(err)
 				buf <- FileMeta{AudioTitle: title}
 				return
 			}
-			buf <- FileMeta{Name: fileName, Content: raw, AudioTitle: title}
-		}(fd.Content, fd.AudioTitle)
+			buf <- FileMeta{Name: fileName, Content: raw, AudioTitle: title, Ext: ext}
+		}(fd.Content, fd.AudioTitle, fd.Ext)
 	}
 	wg.Wait()
 	close(buf)

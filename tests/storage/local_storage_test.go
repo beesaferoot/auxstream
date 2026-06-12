@@ -19,8 +19,8 @@ func TestCreateStore(t *testing.T) {
 
 func TestSaveFile(t *testing.T) {
 	var lstore store.FileSystem = store.NewLocalStore(baseLocation)
-	file1, _ := lstore.Save([]byte("hello world"))
-	file2, _ := lstore.Save([]byte("second file content"))
+	file1, _ := lstore.Save([]byte("hello world"), "mp3")
+	file2, _ := lstore.Save([]byte("second file content"), "mp3")
 	defer lstore.Remove(file1)
 	defer lstore.Remove(file2)
 	require.Equal(t, 2, lstore.Writes())
@@ -29,7 +29,7 @@ func TestSaveFile(t *testing.T) {
 func TestReadFile(t *testing.T) {
 	var lstore store.FileSystem = store.NewLocalStore(baseLocation)
 	write_bytes := []byte("hello world")
-	fileName, _ := lstore.Save(write_bytes)
+	fileName, _ := lstore.Save(write_bytes, "mp3")
 	defer lstore.Remove(fileName)
 	file, err := lstore.Read(fileName)
 	require.NoError(t, err)

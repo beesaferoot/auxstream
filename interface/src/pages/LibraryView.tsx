@@ -25,6 +25,7 @@ const LibraryView = () => {
   const uploadsQ = useQuery({
     queryKey: ['library', 'uploads'],
     queryFn: () => getTrendingTracks(40, 1, 'recent'),
+    enabled: isAuthenticated,
     staleTime: 60_000,
   })
 
@@ -58,11 +59,15 @@ const LibraryView = () => {
           </div>
         </div>
         <div className="flex items-center gap-[18px]">
-          <div className="text-right">
-            <div className="font-display text-[24px] font-bold leading-none">{uploads.length}</div>
-            <div className="font-mono text-[11px] tracking-[.5px] text-faint">UPLOADS</div>
-          </div>
-          <div className="h-[34px] w-px bg-line-sep2" />
+          {isAuthenticated && (
+            <>
+              <div className="text-right">
+                <div className="font-display text-[24px] font-bold leading-none">{uploads.length}</div>
+                <div className="font-mono text-[11px] tracking-[.5px] text-faint">UPLOADS</div>
+              </div>
+              <div className="h-[34px] w-px bg-line-sep2" />
+            </>
+          )}
           <div className="text-right">
             <div className="font-display text-[24px] font-bold leading-none">{playlists.length}</div>
             <div className="font-mono text-[11px] tracking-[.5px] text-faint">PLAYLISTS</div>
@@ -70,7 +75,7 @@ const LibraryView = () => {
         </div>
       </div>
 
-      <UploadDropzone onUploaded={handleUploaded} />
+      {isAuthenticated && <UploadDropzone onUploaded={handleUploaded} />}
 
       {/* playlists */}
       <div className="mb-4 mt-[34px] flex items-center justify-between">
@@ -130,6 +135,8 @@ const LibraryView = () => {
       )}
 
       {/* uploads list */}
+      {isAuthenticated && (
+      <>
       <div className="mb-3.5 flex items-baseline justify-between">
         <div className="font-display text-[25px] font-bold tracking-[-.5px]">Your uploads</div>
         <span className="font-mono text-[12px] text-faint">local files</span>
@@ -170,6 +177,8 @@ const LibraryView = () => {
           })
         )}
       </div>
+      </>
+      )}
 
       <PlaylistFormModal
         open={creating}
