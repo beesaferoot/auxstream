@@ -1,6 +1,6 @@
 COMPOSE = docker compose -f docker-compose.yml --env-file .env
 # Same stack, plus the frontend hot-reload override (Vite dev server + HMR).
-COMPOSE_HOT = docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml --env-file .env
+COMPOSE_HOT = docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env
 
 # Local dev: build for THIS machine and run the full stack.
 dev: ; $(COMPOSE) up --build
