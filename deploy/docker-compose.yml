@@ -4,6 +4,7 @@ services:
   postgres:
     image: postgres:14-alpine
     restart: unless-stopped
+    mem_limit: 256m
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-auxstream}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -19,8 +20,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    mem_limit: 96m
     # Cache only — disable persistence so no volume is needed and restarts are clean.
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # maxmemory makes redis evict (LRU) before it hits the container limit and is OOM-killed.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -35,6 +38,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     command: ["sh", "-c", "./migration init || true; ./migration up"]
+    mem_limit: 128m
     volumes:
       - ./app.env:/app/app.env:ro
     depends_on:
@@ -49,6 +53,7 @@ services:
       dockerfile: deploy/Dockerfile
     command: ["./auxstream"]
     restart: unless-stopped
+    mem_limit: 320m   # headroom for the in-memory upload buffer (MAX_REQUEST_BYTES)
     volumes:
       - ./app.env:/app/app.env:ro
     ports:
@@ -73,6 +78,7 @@ services:
       dockerfile: deploy/Dockerfile
     command: ["./index_worker", "-interval", "24"]
     restart: unless-stopped
+    mem_limit: 96m
     volumes:
       - ./app.env:/app/app.env:ro
     depends_on:
@@ -91,6 +97,7 @@ services:
       args:
         VITE_BASE_URL: ${VITE_BASE_URL:-/api/v1}
     restart: unless-stopped
+    mem_limit: 64m
     ports:
       - "${WEB_BIND:-127.0.0.1}:8080:80"
     depends_on:
