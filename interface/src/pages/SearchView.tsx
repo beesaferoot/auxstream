@@ -32,10 +32,11 @@ const SearchView = () => {
     return () => window.clearTimeout(id)
   }, [query])
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError } = useQuery({
     queryKey: ['search', debounced, filter],
     queryFn: () => searchTracks(debounced, SOURCE_PARAM[filter], 30),
     enabled: debounced.length > 0,
+    retry: false,
     staleTime: 60_000,
   })
 
@@ -97,6 +98,17 @@ const SearchView = () => {
               </div>
             </div>
           ))}
+        </div>
+      ) : isError ? (
+        <div className="py-16 text-center">
+          <div className="text-[18px] font-semibold text-muted">
+            {filter === 'All' ? 'Search is unavailable right now' : `${filter} search is unavailable right now`}
+          </div>
+          <div className="mt-1 text-[14px] text-faint">
+            {filter === 'All' || filter === 'Local'
+              ? 'Please try again in a moment.'
+              : 'This source isn’t connected yet — try “Local” or “All”.'}
+          </div>
         </div>
       ) : results.length === 0 ? (
         <div className="py-16 text-center">

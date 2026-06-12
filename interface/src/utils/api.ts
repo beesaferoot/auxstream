@@ -615,6 +615,9 @@ export function formatDuration(seconds: number): string {
 
 // Helper to construct proper audio URL
 export function getAudioUrl(filePathOrUrl: string): string {
+  // Defensive: never throw during render on missing data.
+  if (!filePathOrUrl) return ''
+
   // If it's already a full URL, return it
   if (
     filePathOrUrl.startsWith('http://') ||
@@ -623,10 +626,15 @@ export function getAudioUrl(filePathOrUrl: string): string {
     return filePathOrUrl
   }
 
-  // If it's an API path starting with /api/v1/, prepend base URL's origin
+  // Same-origin API path. When BASE_URL is absolute (e.g. http://localhost:5009/api/v1)
+  // resolve the path against its origin so audio is fetched directly from the API.
+  // When BASE_URL is relative (e.g. "/api/v1", the same-origin proxy setup), the path
+  // already works as-is — and `new URL("/api/v1")` would throw, so we must not call it.
   if (filePathOrUrl.startsWith('/api/v1/')) {
-    const baseUrlObj = new URL(BASE_URL)
-    return `${baseUrlObj.origin}${filePathOrUrl}`
+    if (/^https?:\/\//i.test(BASE_URL)) {
+      return `${new URL(BASE_URL).origin}${filePathOrUrl}`
+    }
+    return filePathOrUrl
   }
 
   // Otherwise, assume it's just a filename and construct the full URL

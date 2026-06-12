@@ -4,6 +4,7 @@ import FeedView from './pages/FeedView'
 import SearchView from './pages/SearchView'
 import LibraryView from './pages/LibraryView'
 import PlaylistDetailView from './pages/PlaylistDetailView'
+import BrowseView from './pages/BrowseView'
 import NotFound from './components/NotFound'
 
 const Router = () => {
@@ -13,6 +14,7 @@ const Router = () => {
         <Routes>
           <Route path="/" element={<FeedView />} />
           <Route path="/search" element={<SearchView />} />
+          <Route path="/browse/:sort" element={<BrowseView />} />
           <Route path="/library" element={<LibraryView />} />
           <Route path="/library/playlists/:id" element={<PlaylistDetailView />} />
           <Route path="*" element={<NotFound />} />

@@ -171,7 +171,7 @@ const FeedView = () => {
 
       {/* trending */}
       <div className="animate-aux-up">
-        <SectionHeading title="Trending now" chip="across sources" onSeeAll={() => navigate('/search')} />
+        <SectionHeading title="Trending now" chip="across sources" onSeeAll={() => navigate('/browse/trending')} />
         {loading ? (
           <GridSkeleton />
         ) : (
@@ -186,7 +186,7 @@ const FeedView = () => {
       {/* recently added */}
       {(recent.length > 0 || recentQ.isLoading) && (
         <div className="animate-aux-up">
-          <SectionHeading title="Recently added" onSeeAll={() => navigate('/library')} />
+          <SectionHeading title="Recently added" onSeeAll={() => navigate('/browse/recent')} />
           <div className="overflow-hidden rounded-[20px] border-[1.5px] border-line-2 bg-white">
             {recentQ.isLoading
               ? Array.from({ length: 4 }).map((_, i) => <RowSkeleton key={i} />)
