@@ -11,6 +11,10 @@ bin
 .env
 app.env
 
+# local-only compose overrides (e.g. exposing postgres for GUI clients) — never deploy
+docker-compose.override.yml
+**/docker-compose.override.yml
+
 uploads
 .idea
 build

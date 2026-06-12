@@ -87,8 +87,9 @@ services:
       redis:
         condition: service_healthy
 
-  # Web tier: nginx serving the built SPA and proxying /api + /health to `api`.
-  # This is the entry point; the host nginx (TLS) reverse-proxies to its published port.
+  # Web tier: `vite preview` serving the built SPA and proxying /api + /health to
+  # `api`. This is the entry point; the host nginx (TLS) reverse-proxies to its
+  # published port.
   interface:
     image: ${WEB_IMAGE:-auxstream-interface:local}
     build:
@@ -97,9 +98,11 @@ services:
       args:
         VITE_BASE_URL: ${VITE_BASE_URL:-/api/v1}
     restart: unless-stopped
-    mem_limit: 64m
+    mem_limit: 128m   # Node preview process; heavier than the old static nginx
+    environment:
+      VITE_API_PROXY: http://api:5009
     ports:
-      - "${WEB_BIND:-127.0.0.1}:8080:80"
+      - "${WEB_BIND:-127.0.0.1}:8080:8080"
     depends_on:
       api:
         condition: service_healthy
