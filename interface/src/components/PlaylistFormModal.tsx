@@ -58,7 +58,7 @@ const PlaylistFormModal = ({ open, onClose, playlist, onSaved }: PlaylistFormMod
 
   return (
     <div
-      className="absolute inset-0 z-[90] flex animate-aux-pop items-center justify-center p-6"
+      className="fixed inset-0 z-[90] flex animate-aux-pop items-center justify-center p-6"
       style={{ background: 'rgba(12,14,8,.46)', backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)' }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !saving) onClose()
