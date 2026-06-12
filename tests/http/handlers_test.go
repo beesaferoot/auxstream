@@ -11,13 +11,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/imroc/req"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,9 @@ import (
 )
 
 var cwd, _ = os.Getwd()
-var testDataPath = filepath.Join(cwd, "testdata")
+
+// Fixtures live in tests/testdata, one level up from this package (tests/http).
+var testDataPath = filepath.Join(cwd, "..", "testdata")
 var mockDB *sql.DB
 var sqlMock sqlmock.Sqlmock
 var router *gin.Engine
@@ -68,16 +70,18 @@ func TestHTTPAddTrack(t *testing.T) {
 	teardown := setupTest(t)
 	defer teardown(t)
 
+	artistID := uuid.New()
+	trackID := uuid.New()
+
 	// Mock artist lookup
 	sqlMock.ExpectQuery(`SELECT .* FROM "auxstream"\."artists"`).
-		WithArgs(1, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "created_at", "updated_at"}).
-			AddRow(1, "Hike", time.Now(), time.Now()))
+			AddRow(artistID, "Hike", time.Now(), time.Now()))
 
 	sqlMock.ExpectBegin()
 	// Mock track creation
 	sqlMock.ExpectQuery(`INSERT INTO "auxstream"\."tracks"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(trackID))
 	sqlMock.ExpectCommit()
 
 	// Mock real store with test store
@@ -86,7 +90,6 @@ func TestHTTPAddTrack(t *testing.T) {
 	defer tserver.Close()
 
 	title := "Sample Title"
-	artistId := 1
 	audioFilePath := filepath.Join(testDataPath, "audio", "audio.mp3")
 	file, err := os.Open(audioFilePath)
 
@@ -95,7 +98,7 @@ func TestHTTPAddTrack(t *testing.T) {
 	// Create the request body
 	body := req.Param{
 		"title":     title,
-		"artist_id": artistId,
+		"artist_id": artistID.String(),
 	}
 
 	post, err := req.Post(tserver.URL+"/upload_track", body, req.FileUpload{
@@ -116,13 +119,15 @@ func TestHTTPSearchByArtist(t *testing.T) {
 	teardown := setupTest(t)
 	defer teardown(t)
 
+	artistID := uuid.New()
+
 	// Expect Preloaded artist
 	// Mock the JOIN query for artist search
 	sqlMock.ExpectQuery(`SELECT .* FROM "auxstream"\."tracks" JOIN auxstream.artists`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "artist_id", "file", "created_at", "updated_at"}).
-			AddRow(1, "Title", 1, "Test file", time.Now(), time.Now()).
-			AddRow(2, "Title", 1, "Test file", time.Now(), time.Now()).
-			AddRow(3, "Title", 1, "Test file", time.Now(), time.Now()))
+			AddRow(uuid.New(), "Title", artistID, "Test file", time.Now(), time.Now()).
+			AddRow(uuid.New(), "Title", artistID, "Test file", time.Now(), time.Now()).
+			AddRow(uuid.New(), "Title", artistID, "Test file", time.Now(), time.Now()))
 
 	tserver := httptest.NewServer(router)
 	defer tserver.Close()
@@ -144,18 +149,22 @@ func TestHTTPTrackUploadBatch(t *testing.T) {
 	defer teardown(t)
 	testRecordCnt := 30
 
-	// Mock batch insert
+	// Mock batch insert: CreateInBatches issues one INSERT ... RETURNING "id",
+	// and GORM scans one returned id per row, so return a UUID for each track.
+	insertedIDs := sqlmock.NewRows([]string{"id"})
+	for range testRecordCnt {
+		insertedIDs.AddRow(uuid.New())
+	}
 	sqlMock.ExpectBegin()
 	sqlMock.ExpectQuery(`INSERT INTO "auxstream"\."tracks" \(.+\) VALUES .+ RETURNING "id"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).
-			AddRow(30)) // Return the last inserted ID
+		WillReturnRows(insertedIDs)
 	sqlMock.ExpectCommit()
 
 	fs.Store = fs.NewLocalStore(os.TempDir())
 	var err error
 	var trackFiles []req.FileUpload
 
-	artistId := 2
+	artistID := uuid.New()
 	audioFilePath := filepath.Join(testDataPath, "audio", "audio.mp3")
 
 	tserver := httptest.NewServer(router)
@@ -171,7 +180,7 @@ func TestHTTPTrackUploadBatch(t *testing.T) {
 	}
 
 	formData := url.Values{}
-	formData.Add("artist_id", strconv.Itoa(artistId))
+	formData.Add("artist_id", artistID.String())
 	for i := range testRecordCnt {
 		formData.Add("track_titles", fmt.Sprintf("#%d", i))
 	}
@@ -183,21 +192,32 @@ func TestHTTPTrackUploadBatch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 200, post.Response().StatusCode)
 
+	// Every uploaded file shares the filename "audio"; the bulk path must still
+	// persist all of them by correlating on title, not filename.
+	require.Equal(t, float64(testRecordCnt), (*data)["data"].(map[string]any)["rows"])
+
 	// Ensure all expectations were met
-	// require.NoError(t, sqlMock.ExpectationsWereMet())
+	require.NoError(t, sqlMock.ExpectationsWereMet())
 }
 
 func TestHTTPFetchTracks(t *testing.T) {
 	teardown := setupTest(t)
 	defer teardown(t)
 
+	artistID := uuid.New()
+
 	// Mock tracks query with pagination
 	sqlMock.ExpectQuery(`SELECT (.+) FROM "auxstream"\."tracks"`).
 		WithArgs(2).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "artist_id", "file", "created_at", "updated_at"}).
-			AddRow(1, "Title", 1, "Test file", time.Now(), time.Now()).
-			AddRow(2, "Title", 1, "Test file", time.Now(), time.Now()).
-			AddRow(3, "Title", 1, "Test file", time.Now(), time.Now()))
+			AddRow(uuid.New(), "Title", artistID, "Test file", time.Now(), time.Now()).
+			AddRow(uuid.New(), "Title", artistID, "Test file", time.Now(), time.Now()).
+			AddRow(uuid.New(), "Title", artistID, "Test file", time.Now(), time.Now()))
+
+	// GORM Preload("Artist") issues a follow-up query to hydrate the artists.
+	sqlMock.ExpectQuery(`SELECT (.+) FROM "auxstream"\."artists"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "created_at", "updated_at"}).
+			AddRow(artistID, "Hike", time.Now(), time.Now()))
 
 	tserver := httptest.NewServer(router)
 	defer tserver.Close()

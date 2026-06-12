@@ -143,6 +143,15 @@ func (s *server) setupRouter() *gin.Engine {
 
 	r.MaxMultipartMemory = 500 << 20 // 500 miB
 
+	// Hard ceiling on total request body size, applied to the upload routes
+	// below. Bounds whole-request size for DoS protection; the per-file size
+	// limit in the handlers bounds each file within an allowed request.
+	maxReq := s.conf.MaxRequestBytes
+	if maxReq <= 0 {
+		maxReq = 100 << 20 // 100 MiB
+	}
+	uploadLimit := middleware.MaxBodySize(maxReq)
+
 	r.Use(middleware.LoggingMiddleware())
 
 	corsConfig := cors.New(cors.Config{
@@ -197,20 +206,20 @@ func (s *server) setupRouter() *gin.Engine {
 			handlers.TrackPlayHandler(c, db.NewTrackRepo(s.db))
 		})
 
-		tracks.POST("", s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+		tracks.POST("", uploadLimit, s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 			handlers.AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
 		})
-		tracks.POST("/bulk", s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+		tracks.POST("/bulk", uploadLimit, s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 			handlers.BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
 		})
 	}
 
 	// Deprecated: prefer POST /tracks and POST /tracks/bulk. These flat aliases
 	// are retained for backwards compatibility with existing clients.
-	v1.POST("/upload_track", s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+	v1.POST("/upload_track", uploadLimit, s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 		handlers.AddTrackHandler(c, db.NewTrackRepo(s.db), db.NewArtistRepo(s.db))
 	})
-	v1.POST("/upload_batch_track", s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
+	v1.POST("/upload_batch_track", uploadLimit, s.rateLimiter.Middleware(), s.jwtService.JWTAuthMiddleware(), func(c *gin.Context) {
 		handlers.BulkTrackUploadHandler(c, db.NewTrackRepo(s.db))
 	})
 

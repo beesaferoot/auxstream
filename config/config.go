@@ -21,6 +21,7 @@ type Config struct {
 	YouTubeAPIKey      string `mapstructure:"YOUTUBE_API_KEY"`
 	SoundCloudClientID string `mapstructure:"SOUNDCLOUD_CLIENT_ID"`
 	MaxUploadBytes     int64  `mapstructure:"MAX_UPLOAD_BYTES"`
+	MaxRequestBytes    int64  `mapstructure:"MAX_REQUEST_BYTES"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
@@ -38,7 +39,8 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("GOOGLE_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback")
 	viper.SetDefault("YOUTUBE_API_KEY", "")
 	viper.SetDefault("SOUNDCLOUD_CLIENT_ID", "")
-	viper.SetDefault("MAX_UPLOAD_BYTES", 5<<20) // 5 MiB per audio file
+	viper.SetDefault("MAX_UPLOAD_BYTES", 5<<20)     // 5 MiB per audio file
+	viper.SetDefault("MAX_REQUEST_BYTES", 100<<20)  // 100 MiB per request (bulk uploads)
 
 	err = viper.ReadInConfig()
 	if err != nil {

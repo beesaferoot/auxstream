@@ -7,7 +7,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var Log *zap.Logger
+// Log defaults to a no-op logger so the package-level helpers are safe to call
+// before InitLogger runs (e.g. in tests or early startup); InitLogger swaps in
+// the configured logger.
+var Log = zap.NewNop()
 
 func InitLogger(environment string) error {
 	var config zap.Config

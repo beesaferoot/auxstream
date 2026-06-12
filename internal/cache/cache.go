@@ -81,7 +81,9 @@ func (r *Redis) Expire(ctx context.Context, key string, exp time.Duration) error
 }
 
 func (r *Redis) TTL(ctx context.Context, key string) (time.Duration, error) {
-	return r.client.TTL(ctx, key).Result()
+	// PTTL reports millisecond precision; TTL rounds to whole seconds and would
+	// report 0 for any sub-second remaining lifetime.
+	return r.client.PTTL(ctx, key).Result()
 }
 
 func (r *Redis) SAdd(ctx context.Context, key string, members ...string) error {

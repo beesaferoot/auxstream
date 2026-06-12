@@ -119,7 +119,7 @@ func TestSetStringAndGetString(t *testing.T) {
 }
 
 func TestExistsAndTTL(t *testing.T) {
-	r, _ := setupTestRedis(t)
+	r, mr := setupTestRedis(t)
 
 	err := r.SetString("ttl-key", "exists", 500*time.Millisecond)
 	require.NoError(t, err)
@@ -133,7 +133,9 @@ func TestExistsAndTTL(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ttl > 0)
 
-	time.Sleep(600 * time.Millisecond)
+	// miniredis expires keys only when its clock is advanced explicitly; a real
+	// time.Sleep would not move it.
+	mr.FastForward(600 * time.Millisecond)
 	exists, _ = r.Exists(ctx, "ttl-key")
 	require.False(t, exists)
 }
