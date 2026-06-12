@@ -1,7 +1,7 @@
 COMPOSE = docker compose -f docker-compose.yml --env-file .env
 
 # Local dev: build for THIS machine and run the full stack.
-dev: ; $(COMPOSE) up -d --build
+dev: ; $(COMPOSE) up --build
 
 # VPS: pull the prebuilt GHCR images and (re)start. --no-build guarantees the box
 # never compiles — it only runs what CI pushed to GHCR.
