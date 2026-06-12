@@ -43,11 +43,23 @@ run-worker:
 run-worker-once:
 	./build/index_worker -once
 
-deploy-backend: build-all
-	sudo systemctl restart auxstream
-	sudo systemctl restart indexer-worker
+# --- Docker full stack (api, worker, migrate, postgres, redis) via deploy/ ---
+docker-up:
+	$(MAKE) -C deploy dev
 
+docker-down:
+	$(MAKE) -C deploy down
+
+docker-logs:
+	$(MAKE) -C deploy logs
+
+# Production backend deploy on the VPS: pull the prebuilt GHCR image and restart
+# (replaces the old `systemctl restart`; the box runs containers now).
+deploy-backend:
+	$(MAKE) -C deploy deploy
+
+# Frontend is still served by host nginx: build the SPA and reload nginx.
 deploy-frontend: build-frontend
 	sudo systemctl reload nginx
 
-.PHONY: test run createdb setup-db teardown-db rollback-db init-migration-schema migration-history migration-status build build-worker build-all build-frontend run-worker run-worker-once deploy-backend deploy-frontend
+.PHONY: test run createdb setup-db teardown-db rollback-db init-migration-schema migration-history migration-status build build-worker build-all build-frontend run-worker run-worker-once docker-up docker-down docker-logs deploy-backend deploy-frontend

@@ -1,0 +1,20 @@
+.git/
+.idea/
+.claude/
+.DS_Store
+
+# never ship runtime state or secrets
+uploads/
+build/
+*.env
+app.env
+
+# frontend is built/served separately by host nginx
+interface/node_modules/
+interface/dist/
+
+# docs / local
+*.md
+.todo
+.draft
+tests/testdata/

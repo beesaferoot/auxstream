@@ -1,114 +1,31 @@
-name: Deploy to prod
-
+name: build-and-push
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
-permissions:
-  id-token: write # This is required for requesting the JWT
-  contents: read # This is required for actions/checkout
-
 jobs:
-  deploy-backend:
-    name: Deploy Backend
-    runs-on: ubuntu-latest
-
+  image:
+    runs-on: ubuntu-latest      # native amd64 — matches the VPS, no QEMU
+    permissions:
+      contents: read
+      packages: write           # push to GHCR
     steps:
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.8.0
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
-
-      - name: Add server to known hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Build and Deploy Backend
-        run: |
-          ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} <<EOF
-            set -e
-            cd ${{ secrets.DEPLOY_PATH }}
-            
-            echo "Backing up app.env..."
-            cp app.env app.env.backup
-            
-            echo "Pulling latest code..."
-            git fetch origin
-            git reset --hard origin/main
-            
-            echo "Restoring app.env..."
-            mv app.env.backup app.env
-            
-            echo "Building and deploying backend services..."
-            make deploy-backend
-            
-            echo "Backend deployment complete!"
-          EOF
-
-      - name: Backend Health Check
-        run: |
-          sleep 5
-          ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-            "curl -f http://localhost:5009/health || exit 1"
-
-  deploy-frontend:
-    name: Deploy Frontend
-    runs-on: ubuntu-latest
-    needs: deploy-backend # Wait for backend to be ready
-
-    steps:
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.8.0
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # built-in; no PAT needed to push
+      - uses: docker/build-push-action@v6
         with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
-
-      - name: Add server to known hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Build and Deploy Frontend
-        run: |
-          ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} <<EOF
-            set -e
-            cd ${{ secrets.DEPLOY_PATH }}
-            
-            echo "Ensuring latest code is present..."
-            git fetch origin
-            git checkout origin/main -- interface/
-            
-            echo "Building and deploying frontend..."
-            VITE_BASE_URL=/api/v1 make deploy-frontend
-            
-            echo "Frontend deployment complete!"
-          EOF
-
-      - name: Frontend Health Check
-        run: |
-          sleep 3
-          echo "Checking if frontend is accessible..."
-          ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-            "curl -f -s -o /dev/null -w '%{http_code}' http://localhost || echo 'Frontend deployed'"
-
-#      - name: Configure AWS credentials
-#        uses: aws-actions/configure-aws-credentials@v4 # More information on this action can be found below in the 'AWS Credentials' section
-#        with:
-#          role-to-assume: arn:aws:iam::931493408513:role/github-ci
-#          aws-region: af-south-1
-#
-#      - name: Login to Amazon ECR
-#        id: login-ecr
-#        uses: aws-actions/amazon-ecr-login@v2
-#
-#      - name: Build, tag, and push docker image to Amazon ECR
-#        env:
-#          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-#          REPOSITORY: auxstream
-#          IMAGE_TAG: ${{ github.sha }}
-#        run: |
-#          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-#          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/auxstream:latest
+            ghcr.io/${{ github.repository_owner }}/auxstream:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

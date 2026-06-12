@@ -1,0 +1,85 @@
+name: auxstream
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-auxstream}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-auxstreamdb}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-auxstream} -d ${POSTGRES_DB:-auxstreamdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Cache only — disable persistence so no volume is needed and restarts are clean.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # One-shot: initialise (idempotent) and apply migrations, then exit. The api/worker
+  # wait for this to complete successfully before starting.
+  migrate:
+    image: ${IMAGE:-auxstream:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["sh", "-c", "./migration init || true; ./migration up"]
+    volumes:
+      - ./app.env:/app/app.env:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: ${IMAGE:-auxstream:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["./auxstream"]
+    restart: unless-stopped
+    volumes:
+      - ./app.env:/app/app.env:ro
+    ports:
+      # Loopback only — host nginx reverse-proxies to it. Never public.
+      - "${HTTP_BIND:-127.0.0.1}:5009:5009"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5009/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: ${IMAGE:-auxstream:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["./index_worker", "-interval", "24"]
+    restart: unless-stopped
+    volumes:
+      - ./app.env:/app/app.env:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
