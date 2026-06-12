@@ -63,7 +63,7 @@ const PlayerOverlay = () => {
   }
 
   return (
-    <div className="absolute inset-0 z-40 flex animate-aux-spin-in flex-col overflow-hidden bg-player-bg text-[#f4f6e9]">
+    <div className="absolute inset-0 z-[60] flex animate-aux-spin-in flex-col overflow-hidden bg-player-bg text-[#f4f6e9]">
       {/* glow */}
       <div
         className="pointer-events-none absolute left-[-10%] top-[-20%] h-[80%] w-[60%] rounded-full"
