@@ -1,12 +1,28 @@
+/* eslint-disable react-refresh/only-export-components -- provider + hook co-located by design */
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { isAuthenticated, logout as apiLogout } from '../utils/api'
 
 interface AuthContextType {
   isAuthenticated: boolean
   userEmail: string | null
+  /** Display name derived from the email local-part (e.g. "harper" -> "Harper"). */
+  userName: string
+  /** Single-letter avatar initial. */
+  userInitial: string
   login: (token: string, email?: string) => void
   logout: () => Promise<void>
   checkAuth: () => void
+}
+
+/** Derive a friendly display name from an email address. */
+function deriveName(email: string | null): string {
+  if (!email) return 'Guest'
+  const local = email.split('@')[0].replace(/[._-]+/g, ' ').trim()
+  if (!local) return 'Guest'
+  return local
+    .split(' ')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -72,9 +88,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }, [])
 
+  const userName = deriveName(userEmail)
+  const userInitial = (userName.charAt(0) || 'G').toUpperCase()
+
   const value = {
     isAuthenticated: authenticated,
     userEmail,
+    userName,
+    userInitial,
     login,
     logout,
     checkAuth,

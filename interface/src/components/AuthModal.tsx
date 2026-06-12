@@ -1,257 +1,179 @@
 import { useState } from 'react'
-import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalCloseButton,
-  Button,
-  VStack,
-  Input,
-  FormControl,
-  FormLabel,
-  FormErrorMessage,
-  Text,
-  useToast,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-} from '@chakra-ui/react'
 import { login as apiLogin, register as apiRegister } from '../utils/api'
 import { useAuth } from '../context/AuthContext'
+import { useUI } from '../context/UIContext'
+import { useToast } from './ui/Toast'
+import { LogoGlyph } from './Icons'
 
-interface AuthModalProps {
-  isOpen: boolean
-  onClose: () => void
-  defaultTab?: number
-}
+const fieldClass =
+  'w-full rounded-xl border-[1.5px] border-line bg-[#fbfcf6] px-3.5 py-3 text-[16px] text-ink-text outline-none transition-colors focus:border-lime focus:bg-white'
+const labelClass = 'mb-1.5 block text-[13px] font-bold text-muted'
 
-const AuthModal = ({ isOpen, onClose, defaultTab = 0 }: AuthModalProps) => {
+/**
+ * Sign in / sign up in a centered card over the blurred, dimmed app.
+ * Opened on demand via UIContext (anonymous browsing is allowed).
+ */
+const AuthModal = () => {
+  const { authOpen, authMode, closeAuth, setAuthMode } = useUI()
+  const { login: authLogin, checkAuth } = useAuth()
+  const { toast } = useToast()
+
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
-  const toast = useToast()
-  const { login: authLogin, checkAuth } = useAuth()
+  const [loading, setLoading] = useState(false)
 
-  const validateEmail = (email: string): boolean => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return re.test(email)
-  }
+  if (!authOpen) return null
 
-  const validateForm = (): boolean => {
-    const newErrors: { email?: string; password?: string } = {}
+  const isSignup = authMode === 'signup'
 
-    if (!email.trim()) {
-      newErrors.email = 'Email is required'
-    } else if (!validateEmail(email)) {
-      newErrors.email = 'Invalid email format'
-    }
-
-    if (!password) {
-      newErrors.password = 'Password is required'
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters'
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleLogin = async () => {
-    if (!validateForm()) return
-
-    setIsLoading(true)
-    try {
-      const response = await apiLogin({ email, password })
-      authLogin(response.data.access_token, email)
-      checkAuth()
-
-      toast({
-        title: 'Login successful!',
-        description: `Welcome back, ${email}`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      })
-
-      // Reset form
-      setEmail('')
-      setPassword('')
-      setErrors({})
-      onClose()
-    } catch (error) {
-      toast({
-        title: 'Login failed',
-        description: error instanceof Error ? error.message : 'Invalid credentials',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleRegister = async () => {
-    if (!validateForm()) return
-
-    setIsLoading(true)
-    try {
-      await apiRegister({ email, password })
-
-      toast({
-        title: 'Registration successful!',
-        description: 'You can now log in with your credentials',
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      })
-
-      // Auto-login after registration
-      await handleLogin()
-    } catch (error) {
-      toast({
-        title: 'Registration failed',
-        description:
-          error instanceof Error ? error.message : 'Unable to create account',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleClose = () => {
+  const reset = () => {
+    setName('')
     setEmail('')
     setPassword('')
-    setErrors({})
-    onClose()
+  }
+
+  const validate = (): string | null => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Enter a valid email address'
+    if (password.length < 6) return 'Password must be at least 6 characters'
+    return null
+  }
+
+  const doLogin = async () => {
+    const res = await apiLogin({ email, password })
+    authLogin(res.data.access_token, email)
+    checkAuth()
+    toast({ title: 'Welcome back', description: email, status: 'success' })
+    reset()
+    closeAuth()
+  }
+
+  const submit = async () => {
+    const err = validate()
+    if (err) {
+      toast({ title: 'Check your details', description: err, status: 'error' })
+      return
+    }
+    setLoading(true)
+    try {
+      if (isSignup) {
+        await apiRegister({ email, password })
+        await doLogin()
+      } else {
+        await doLogin()
+      }
+    } catch (e) {
+      toast({
+        title: isSignup ? 'Could not create account' : 'Login failed',
+        description: e instanceof Error ? e.message : 'Please try again',
+        status: 'error',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') submit()
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="md">
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>Welcome to AuxStream</ModalHeader>
-        <ModalCloseButton />
-        <ModalBody pb={6}>
-          <Tabs defaultIndex={defaultTab} colorScheme="brand">
-            <TabList>
-              <Tab>Login</Tab>
-              <Tab>Register</Tab>
-            </TabList>
+    <div
+      className="absolute inset-0 z-[80] flex animate-aux-pop items-center justify-center p-6"
+      style={{
+        background: 'rgba(12,14,8,.46)',
+        backdropFilter: 'blur(15px)',
+        WebkitBackdropFilter: 'blur(15px)',
+      }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) closeAuth()
+      }}
+    >
+      <div className="w-[min(424px,94vw)] animate-aux-spin-in rounded-hero border-[1.5px] border-[#ece9dc] bg-[#fffdf9] p-[36px_34px] shadow-modal">
+        <div className="mb-[26px] flex items-center gap-2.5">
+          <div className="flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-lime text-ink shadow-[0_6px_16px_rgba(182,240,60,.35)]">
+            <LogoGlyph size={20} />
+          </div>
+          <span className="font-display text-[21px] font-extrabold tracking-[-.4px]">auxstream</span>
+        </div>
 
-            <TabPanels>
-              {/* Login Tab */}
-              <TabPanel>
-                <VStack spacing={4} align="stretch">
-                  <FormControl isInvalid={!!errors.email}>
-                    <FormLabel>Email</FormLabel>
-                    <Input
-                      type="email"
-                      placeholder="Enter your email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      isDisabled={isLoading}
-                    />
-                    {errors.email && (
-                      <FormErrorMessage>{errors.email}</FormErrorMessage>
-                    )}
-                  </FormControl>
+        <div className="font-display text-[30px] font-extrabold leading-[1.05] tracking-[-1px]">
+          {isSignup ? 'Create your account' : 'Welcome back'}
+        </div>
+        <div className="mb-6 mt-1.5 text-[15px] text-muted-2">
+          {isSignup
+            ? 'One account for every source — start aggregating in seconds.'
+            : 'Sign in to pick up where the music left off.'}
+        </div>
 
-                  <FormControl isInvalid={!!errors.password}>
-                    <FormLabel>Password</FormLabel>
-                    <Input
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                      isDisabled={isLoading}
-                    />
-                    {errors.password && (
-                      <FormErrorMessage>{errors.password}</FormErrorMessage>
-                    )}
-                  </FormControl>
+        {isSignup && (
+          <div className="mb-3.5">
+            <label className={labelClass}>Name</label>
+            <input
+              className={fieldClass}
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={onKey}
+            />
+          </div>
+        )}
 
-                  <Button
-                    colorScheme="brand"
-                    onClick={handleLogin}
-                    isLoading={isLoading}
-                    loadingText="Logging in..."
-                    size="lg"
-                    mt={2}
-                  >
-                    Login
-                  </Button>
+        <div className="mb-3.5">
+          <label className={labelClass}>Email</label>
+          <input
+            type="email"
+            className={fieldClass}
+            placeholder="you@email.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={onKey}
+          />
+        </div>
 
-                  <Text fontSize="sm" color="gray.600" textAlign="center">
-                    Don't have an account? Switch to Register tab.
-                  </Text>
-                </VStack>
-              </TabPanel>
+        <div className="mb-3.5">
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <label className="text-[13px] font-bold text-muted">Password</label>
+            {!isSignup && (
+              <span className="cursor-pointer text-[13px] font-semibold text-[#5d7a14]">Forgot?</span>
+            )}
+          </div>
+          <input
+            type="password"
+            className={fieldClass}
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={onKey}
+          />
+        </div>
 
-              {/* Register Tab */}
-              <TabPanel>
-                <VStack spacing={4} align="stretch">
-                  <FormControl isInvalid={!!errors.email}>
-                    <FormLabel>Email</FormLabel>
-                    <Input
-                      type="email"
-                      placeholder="Enter your email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      isDisabled={isLoading}
-                    />
-                    {errors.email && (
-                      <FormErrorMessage>{errors.email}</FormErrorMessage>
-                    )}
-                  </FormControl>
+        <button
+          onClick={submit}
+          disabled={loading}
+          className="mt-2 w-full rounded-pill bg-lime py-[15px] text-[17px] font-extrabold text-ink shadow-lime transition-all hover:-translate-y-px hover:shadow-lime-hover disabled:opacity-60"
+        >
+          {loading ? 'Please wait…' : isSignup ? 'Create account' : 'Log in'}
+        </button>
 
-                  <FormControl isInvalid={!!errors.password}>
-                    <FormLabel>Password</FormLabel>
-                    <Input
-                      type="password"
-                      placeholder="Create a password (min. 6 characters)"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleRegister()}
-                      isDisabled={isLoading}
-                    />
-                    {errors.password && (
-                      <FormErrorMessage>{errors.password}</FormErrorMessage>
-                    )}
-                  </FormControl>
+        <div className="my-[22px] flex items-center gap-3">
+          <div className="h-px flex-1 bg-[#ece9dc]" />
+          <span className="font-mono text-[11px] text-faint-2">OR</span>
+          <div className="h-px flex-1 bg-[#ece9dc]" />
+        </div>
 
-                  <Button
-                    colorScheme="brand"
-                    onClick={handleRegister}
-                    isLoading={isLoading}
-                    loadingText="Creating account..."
-                    size="lg"
-                    mt={2}
-                  >
-                    Create Account
-                  </Button>
-
-                  <Text fontSize="sm" color="gray.600" textAlign="center">
-                    Already have an account? Switch to Login tab.
-                  </Text>
-                </VStack>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        </ModalBody>
-      </ModalContent>
-    </Modal>
+        <div className="text-center text-[15px] text-muted-2">
+          {isSignup ? 'Already have an account?' : 'New to AuxStream?'}{' '}
+          <span
+            onClick={() => setAuthMode(isSignup ? 'signin' : 'signup')}
+            className="cursor-pointer border-b-2 border-lime font-extrabold text-ink-text"
+          >
+            {isSignup ? 'Log in' : 'Create one'}
+          </span>
+        </div>
+      </div>
+    </div>
   )
 }
 
 export default AuthModal
-
