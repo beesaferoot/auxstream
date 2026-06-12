@@ -9,9 +9,11 @@ build/
 *.env
 app.env
 
-# frontend is built/served separately by host nginx
+# frontend: node_modules/dist are rebuilt in the image; .env would bake the wrong
+# VITE_BASE_URL (the container build passes it as a build arg instead).
 interface/node_modules/
 interface/dist/
+interface/.env*
 
 # docs / local
 *.md

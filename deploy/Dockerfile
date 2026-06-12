@@ -24,6 +24,11 @@ WORKDIR /app
 COPY --from=builder /out/auxstream    ./auxstream
 COPY --from=builder /out/index_worker ./index_worker
 COPY --from=builder /out/migration    ./migration
+# gorm-migrate parses migration SQL from the *.go source files at runtime (it does
+# not use the compiled-in registry), so the migrate binary needs them on disk.
+COPY --from=builder /src/migrations ./migrations
+# Runtime config the worker reads relative to the working dir.
+COPY --from=builder /src/config/ext_sources.yaml ./config/ext_sources.yaml
 RUN chown -R app:app /app
 USER app
 EXPOSE 5009

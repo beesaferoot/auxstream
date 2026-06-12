@@ -39,8 +39,8 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("GOOGLE_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback")
 	viper.SetDefault("YOUTUBE_API_KEY", "")
 	viper.SetDefault("SOUNDCLOUD_CLIENT_ID", "")
-	viper.SetDefault("MAX_UPLOAD_BYTES", 5<<20)     // 5 MiB per audio file
-	viper.SetDefault("MAX_REQUEST_BYTES", 100<<20)  // 100 MiB per request (bulk uploads)
+	viper.SetDefault("MAX_UPLOAD_BYTES", 5<<20)    // 5 MiB per audio file
+	viper.SetDefault("MAX_REQUEST_BYTES", 50<<20)  // 50 MiB per request (bulk uploads); proxied upload buffers in memory
 
 	err = viper.ReadInConfig()
 	if err != nil {
