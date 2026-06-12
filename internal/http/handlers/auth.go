@@ -2,37 +2,26 @@ package handlers
 
 import (
 	"auxstream/internal/auth"
-	"auxstream/internal/cache"
 	"auxstream/internal/db"
-	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// oauthStateTTL bounds how long a pending OAuth login may stay open before the
-// generated state token is rejected as stale.
-const oauthStateTTL = 10 * time.Minute
-
 type AuthService struct {
 	userRepo       db.UserRepo
 	jwtService     *auth.JWTService
 	refreshService *auth.RefreshTokenService
-	oauthService   *auth.OAuthService
-	cache          cache.Cache
 }
 
-func NewAuthService(userRepo db.UserRepo, jwtService *auth.JWTService, refreshService *auth.RefreshTokenService, oauthService *auth.OAuthService, cache cache.Cache) *AuthService {
+func NewAuthService(userRepo db.UserRepo, jwtService *auth.JWTService, refreshService *auth.RefreshTokenService) *AuthService {
 	return &AuthService{
 		userRepo:       userRepo,
 		jwtService:     jwtService,
 		refreshService: refreshService,
-		oauthService:   oauthService,
-		cache:          cache,
 	}
 }
 
@@ -87,7 +76,6 @@ func (a *AuthService) Register(c *gin.Context) {
 	user := &db.User{
 		Email:        req.Email,
 		PasswordHash: hashedPassword,
-		Provider:     "local",
 		ID:           uuid.New(),
 	}
 
@@ -243,100 +231,6 @@ func (a *AuthService) Logout(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
-}
-
-// GoogleAuth initiates the Google OAuth flow.
-func (a *AuthService) GoogleAuth(c *gin.Context) {
-	state := uuid.New().String()
-
-	// Persist the state so the callback can prove this request originated here,
-	// protecting the OAuth flow against CSRF.
-	if err := a.cache.Set(oauthStateKey(state), true, oauthStateTTL); err != nil {
-		log.Printf("store oauth state error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start authentication"})
-		return
-	}
-
-	authURL := a.oauthService.GetAuthURL(state)
-
-	c.JSON(http.StatusOK, gin.H{
-		"auth_url": authURL,
-		"state":    state,
-	})
-}
-
-// GoogleCallback handles the Google OAuth callback.
-func (a *AuthService) GoogleCallback(c *gin.Context) {
-	code := c.Query("code")
-	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code not provided"})
-		return
-	}
-
-	// Verify the state issued by GoogleAuth before trusting this callback.
-	state := c.Query("state")
-	if state == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "State parameter not provided"})
-		return
-	}
-	exists, err := a.cache.Exists(c.Request.Context(), oauthStateKey(state))
-	if err != nil || !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired state"})
-		return
-	}
-	// State is single-use; consume it so it cannot be replayed.
-	_ = a.cache.Del(oauthStateKey(state))
-
-	token, err := a.oauthService.ExchangeCodeForToken(c.Request.Context(), code)
-	if err != nil {
-		log.Printf("ExchangeCodeForToken error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange code for token"})
-		return
-	}
-
-	googleUser, err := a.oauthService.GetUserInfo(c.Request.Context(), token)
-	if err != nil {
-		log.Printf("GetUserInfo error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info from Google"})
-		return
-	}
-
-	user, err := a.oauthService.FindOrCreateUser(c.Request.Context(), googleUser)
-	if err != nil {
-		log.Printf("FindOrCreateUser error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create or find user"})
-		return
-	}
-
-	accessToken, err := a.jwtService.GenerateAccessToken(user.ID, user.Email)
-	if err != nil {
-		log.Printf("GenerateAccessToken error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
-		return
-	}
-
-	refreshToken, err := a.refreshService.GenerateAndStoreRefreshToken(c.Request.Context(), user.ID)
-	if err != nil {
-		log.Printf("GenerateRefreshToken error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
-		return
-	}
-
-	response := TokenResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    a.accessTokenExpiresIn(),
-		TokenType:    "Bearer",
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Google authentication successful",
-		"data":    response,
-	})
-}
-
-func oauthStateKey(state string) string {
-	return fmt.Sprintf("oauth_state:%s", state)
 }
 
 func hashPassword(password string) (string, error) {

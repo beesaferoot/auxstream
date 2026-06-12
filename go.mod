@@ -25,14 +25,12 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.21.0
 	golang.org/x/crypto v0.42.0
-	golang.org/x/oauth2 v0.32.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.30.0
 )
 
 require (
-	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

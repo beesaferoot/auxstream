@@ -12,7 +12,6 @@ type UserRepo interface {
 	GetUserById(ctx context.Context, id uuid.UUID) (*User, error)
 	GetUserByUsername(ctx context.Context, username string) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
-	GetUserByGoogleID(ctx context.Context, googleID string) (*User, error)
 	UpdateUser(ctx context.Context, user *User) (*User, error)
 }
 
@@ -51,12 +50,6 @@ func (r *userRepo) GetUserByUsername(ctx context.Context, username string) (*Use
 func (r *userRepo) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	user := &User{}
 	res := r.Db.WithContext(ctx).Where("email = ?", email).First(user)
-	return user, res.Error
-}
-
-func (r *userRepo) GetUserByGoogleID(ctx context.Context, googleID string) (*User, error) {
-	user := &User{}
-	res := r.Db.WithContext(ctx).Where("google_id = ?", googleID).First(user)
 	return user, res.Error
 }
 

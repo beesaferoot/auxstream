@@ -50,19 +50,10 @@ func NewServer(serverConfig ServerConfig) Server {
 
 	refreshService := auth.NewRefreshTokenService(serverConfig.Cache, jwtService)
 
-	oauthService := auth.NewOAuthService(
-		serverConfig.Conf.GoogleClientID,
-		serverConfig.Conf.GoogleClientSecret,
-		serverConfig.Conf.GoogleRedirectURL,
-		db.NewUserRepo(serverConfig.DB),
-	)
-
 	authService := handlers.NewAuthService(
 		db.NewUserRepo(serverConfig.DB),
 		jwtService,
 		refreshService,
-		oauthService,
-		serverConfig.Cache,
 	)
 
 	youtubeClient := external.NewYouTubeClient(serverConfig.Conf.YouTubeAPIKey)
@@ -155,7 +146,8 @@ func (s *server) setupRouter() *gin.Engine {
 	r.Use(middleware.LoggingMiddleware())
 
 	corsConfig := cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
+		// Dev server (:3000) and the preview/prod SPA (:8080).
+		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:8080"},
 		AllowMethods:     []string{"PUT", "PATCH", "POST", "GET", "OPTIONS", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -173,8 +165,6 @@ func (s *server) setupRouter() *gin.Engine {
 	v1.POST("/login", s.authService.Login)
 	v1.POST("/refresh", s.authService.RefreshToken)
 	v1.POST("/logout", s.authService.Logout)
-	v1.GET("/auth/google", s.authService.GoogleAuth)
-	v1.GET("/auth/google/callback", s.authService.GoogleCallback)
 
 	artists := v1.Group("/artists")
 	{
