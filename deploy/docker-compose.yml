@@ -102,7 +102,7 @@ services:
     environment:
       VITE_API_PROXY: http://api:5009
     ports:
-      - "${WEB_BIND:-127.0.0.1}:8080:8080"
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:8080"
     depends_on:
       api:
         condition: service_healthy
