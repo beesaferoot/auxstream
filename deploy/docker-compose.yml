@@ -20,10 +20,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    mem_limit: 96m
+    mem_limit: 192m
     # Cache only — disable persistence so no volume is needed and restarts are clean.
     # maxmemory makes redis evict (LRU) before it hits the container limit and is OOM-killed.
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "144mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
